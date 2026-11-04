@@ -8,6 +8,7 @@ import sys
 HOOK = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "hooks", "git-message-style.py")
 # Claude Code 처럼 UTF-8 로 보내고, 훅 입출력 기본값은 cp949 로 두어 Windows 한국어 로캘을 흉내 낸다
 ENV = dict(os.environ, PYTHONIOENCODING="cp949")
+ENV.pop("CLAUDE_PLUGIN_OPTION_GIT_MESSAGE_CHECK", None)   # 켜기는 시험마다 인자나 환경변수로 직접 준다
 
 CASES = [
     # (이름, 기대, 명령)
@@ -66,10 +67,10 @@ CASES = [
 ]
 
 
-def run(cmd, tool="Bash", check=("true",)):
+def run(cmd, tool="Bash", check=("true",), env=None):
     payload = json.dumps({"tool_name": tool, "tool_input": {"command": cmd}}, ensure_ascii=False)
     out = subprocess.run(
-        [sys.executable, HOOK, *check], input=payload, capture_output=True, encoding="utf-8", env=ENV
+        [sys.executable, HOOK, *check], input=payload, capture_output=True, encoding="utf-8", env=dict(ENV, **(env or {}))
     ).stdout.strip()
     return ("DENY", out) if out else ("ALLOW", "")
 
@@ -95,9 +96,12 @@ BAD = 'git commit -m "파서를 복구했습니다"'
 TOGGLE = [("설정 없음은 통과", "ALLOW", ()), ("빈 값은 통과", "ALLOW", ("",)),
           ("false 는 통과", "ALLOW", ("false",)),
           ("치환 안 된 값은 통과", "ALLOW", ("${user_config.git_message_check}",)),
-          ("true 는 검사", "DENY", ("true",))]
-for name, want, check in TOGGLE:
-    got = run(BAD, check=check)[0]
+          ("true 는 검사", "DENY", ("true",), {}),
+          ("인자 없이 환경변수 true 는 검사", "DENY", (), {"CLAUDE_PLUGIN_OPTION_GIT_MESSAGE_CHECK": "true"}),
+          ("치환 안 된 인자와 환경변수 false 는 통과", "ALLOW", ("${user_config.git_message_check}",),
+           {"CLAUDE_PLUGIN_OPTION_GIT_MESSAGE_CHECK": "false"})]
+for name, want, check, *env in TOGGLE:
+    got = run(BAD, check=check, env=env[0] if env else None)[0]
     print("%s  %s" % ("PASS" if got == want else "FAIL", name))
     fail += got != want
 total = len(CASES) + 2 + len(TOGGLE)

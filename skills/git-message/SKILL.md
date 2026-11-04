@@ -72,7 +72,7 @@ lanekeeper 플러그인의 `hooks/git-message-style.py` 가 `PreToolUse` 에서 
 플러그인 저장소 `tests/` 에 둘 있다. 훅을 고치면 둘 다 돌린다.
 
 ```bash
-python3 tests/test_style_basic.py   # 기본 규칙과 켜기 설정 43건
+python3 tests/test_style_basic.py   # 기본 규칙과 켜기 설정 45건
 python3 tests/test_style_multi.py   # 한 호출에 여러 명령 7건
 ```
 

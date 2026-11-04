@@ -7,7 +7,8 @@
 - 본문: 개조식(불릿), 서술형 종결어미 금지
 - 제목과 본문 사이 빈 줄 1개
 
-켜기: 플러그인 설정 git_message_check=true. hooks.json 이 첫 인자로 넘긴다. 기본은 꺼짐이라 바로 통과한다.
+켜기: 플러그인 설정 git_message_check=true. hooks.json 이 첫 인자로 넘기고, 환경변수
+CLAUDE_PLUGIN_OPTION_GIT_MESSAGE_CHECK 로도 읽는다. 기본은 꺼짐이라 바로 통과한다.
 해제: CLAUDE_GIT_STYLE=off
 """
 import json
@@ -190,8 +191,11 @@ RULES = """문구 규칙
 
 
 def main():
+    # 첫 인자나 CLAUDE_PLUGIN_OPTION_GIT_MESSAGE_CHECK 중 하나가 켜짐이면 검사한다.
     # 값이 비었거나 치환되지 않은 채로 와도 꺼짐으로 본다
-    if (sys.argv[1:2] or [""])[0].strip().lower() not in ("true", "1", "yes", "on"):
+    on = ("true", "1", "yes", "on")
+    vals = sys.argv[1:2] + [os.environ.get("CLAUDE_PLUGIN_OPTION_GIT_MESSAGE_CHECK", "")]
+    if not any(v.strip().lower() in on for v in vals):
         return 0
     if os.environ.get("CLAUDE_GIT_STYLE", "").lower() == "off":
         return 0

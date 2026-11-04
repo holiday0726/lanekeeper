@@ -18,4 +18,4 @@ This release renames the plugin. Existing users need to reinstall.
 
 ### Moving from agent-hub
 
-Settings do not carry over, because they are stored per plugin name and removed together with the old plugin. Write them down, uninstall `agent-hub@agent-hub`, remove the `agent-hub` marketplace, install `lanekeeper`, and enter the settings again. If you used the git message check, set `git_message_check` to `true`. Step by step: [Moving from the old name](README.md#moving-from-the-old-name) ([한국어](README.ko.md#옛-이름에서-옮기기)).
+Settings do not carry over, because they are stored per plugin name and removed together with the old plugin. Write them down, uninstall `agent-hub@agent-hub`, remove the `agent-hub` marketplace, install `lanekeeper`, and enter the settings again. If you used the git message check, set `git_message_check` to `true`. Step by step: [Moving from the old name](https://github.com/holiday0726/lanekeeper/blob/main/README.md#moving-from-the-old-name) ([한국어](https://github.com/holiday0726/lanekeeper/blob/main/README.ko.md#옛-이름에서-옮기기)).
