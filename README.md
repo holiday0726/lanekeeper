@@ -1,135 +1,145 @@
 # lanekeeper
 
-Claude Code 세션 하나를 허브로 두고, 허브가 다른 세션들에 일을 나눠 맡기고 보고를 받아 기록하게 만드는 플러그인입니다. 허브가 따를 규칙 문서 틀과 세션 현황을 보는 로컬 대시보드, 허브 폴더를 지키는 훅이 함께 들어 있습니다.
+English | [한국어](README.ko.md)
+
+A plugin that makes one Claude Code session the hub. The hub splits work across other sessions, hands it out, receives their reports and keeps the record. It ships with rule document templates for the hub, a local dashboard that shows what the sessions are doing, and hooks that protect the hub folder.
+
+<img alt="Dashboard demo: an assignment shows up in the Flow tab, a report comes back, the Status tab is updated, and user decisions collect in the Decisions tab" src="docs/images/demo.gif" width="800">
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.png">
-  <img alt="lanekeeper 구성도: 사용자가 허브 세션에 지시하고, 허브가 슈퍼바이저와 작업 세션에 배정합니다. 허브는 허브 폴더에 기록하고 대시보드가 그 폴더를 읽습니다. 플러그인 훅 세 개가 허브 폴더 보호, 대시보드 열기, git 문구 검사를 맡습니다." src="docs/images/architecture-light.png" width="800">
+  <img alt="lanekeeper architecture: the user instructs the hub session, the hub assigns work to a supervisor and task sessions, the hub writes to the hub folder and the dashboard reads that folder. Three plugin hooks protect the hub folder, open the dashboard and check git messages." src="docs/images/architecture-light.png" width="800">
 </picture>
 
-## 무엇이 들어 있나
+The diagrams and the dashboard screenshots use Korean labels.
 
-| 구성 | 위치 | 하는 일 |
+## What is in it
+
+| Part | Where | What it does |
 |---|---|---|
-| 허브 규칙 틀 | `templates/hub/` | 허브의 역할과 스킬 쓰는 때(`CLAUDE.md`), 세션 사이 약속과 보고 형식(`COORDINATION.md`), 현황판(`STATUS.md`)과 빈 데이터 파일 셋 |
-| 대시보드 | `dashboard/` | 떠 있는 세션, 사용자 결정, 현황, 세션 사이 메시지를 보여 주는 읽기 전용 웹 화면. Python 표준 라이브러리만 씁니다 |
-| 훅 | `hooks/` | 허브 폴더에서 세션을 열면 대시보드를 띄우고, 다른 세션이 허브 폴더를 고치지 못하게 막고, git 커밋 문구를 검사합니다 |
-| 스킬 | `skills/` | 설치 마무리 `setup`, 글을 사람이 쓴 것처럼 다듬는 `humanizer`, 커밋 문구 규칙 `git-message` |
-| 설치 스크립트 | `scripts/` | `setup` 스킬이 부르는 `setup_hub.py`. 허브 폴더 복사와 설정 합치기를 맡습니다 |
-| 설정 예시 | `examples/` | 허브와 슈퍼바이저 세션의 권한, 기본 모델 같은 설정 견본 |
+| Hub rule templates | `templates/hub/` | The hub role and when to use which skill (`CLAUDE.md`), agreements between sessions and the report format (`COORDINATION.md`), a status board (`STATUS.md`) and three empty data files |
+| Dashboard | `dashboard/` | A web page that only reads. It shows running sessions, user decisions, status and messages between sessions. It uses only the Python standard library |
+| Hooks | `hooks/` | Start the dashboard when a session opens in the hub folder, stop other sessions from editing the hub folder, and check git commit messages when you turn that on |
+| Skills | `skills/` | `setup` to finish the install, `humanizer` to make text read like a person wrote it, `git-message` with the commit message rules |
+| Install script | `scripts/` | `setup_hub.py`, called by the `setup` skill. It copies the hub folder and merges settings |
+| Settings examples | `examples/` | Sample settings for the hub and supervisor sessions, such as permissions and the default model |
 
-## 배정에서 보고까지
+## From assignment to report
 
-사용자는 허브에게만 말합니다. 허브는 작업 세션을 띄워 `[배정]` 메시지를 보내고, 작업 세션은 일을 마치면 `[보고]` 를 보냅니다. 허브가 그 결과를 `STATUS.md` 에 적고 사용자 결정이 필요한 것은 `decisions.json` 에 모으면, 사용자는 대시보드에서 한 번에 확인합니다.
+The user talks only to the hub. The hub starts a task session and sends it an `[배정]` (assignment) message. When the task session is done it sends back a `[보고]` (report). The hub writes the result to `STATUS.md` and collects anything that needs a user decision in `decisions.json`, so the user can check it all at once on the dashboard.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/flow-dark.png">
-  <img alt="배정에서 보고까지의 순서도: 사용자가 허브에 일을 맡기고, 허브가 세션을 등록하고 띄운 뒤 배정을 보냅니다. 작업 세션이 보고하면 허브가 STATUS.md 에 반영하고, 대시보드가 허브 폴더를 읽어 사용자에게 보여 줍니다." src="docs/images/flow-light.png" width="800">
+  <img alt="Sequence from assignment to report: the user gives the hub a job, the hub registers and starts a session and sends the assignment. When the task session reports, the hub updates STATUS.md and the dashboard reads the hub folder and shows it to the user." src="docs/images/flow-light.png" width="800">
 </picture>
 
-## 빠른 시작
+## Quick start
 
-Claude Code 와 Python 3.8 이상이 있으면 됩니다.
-Windows, Linux, macOS 모두 같은 방법입니다.
+You need Claude Code and Python 3.8 or later.
+The steps are the same on Windows, Linux and macOS.
 
-터미널(Windows 는 PowerShell)에서 GitHub 마켓플레이스로 플러그인을 설치합니다.
+The hub rule templates (`templates/hub`) and the skill documents are written in Korean. The hub session reads them as they are, so the hub follows Korean rules and writes Korean messages unless you translate the templates.
+
+In a terminal (PowerShell on Windows), install the plugin from the GitHub marketplace.
 
 ```sh
 claude plugin install lanekeeper --marketplace holiday0726/lanekeeper
 ```
 
-설치가 끝나면 설정값 `python` 과 `hub_dir` 가 비어 있다는 안내가 나옵니다.
-다음 단계에서 채웁니다.
+When the install finishes you will see a note that the settings `python` and `hub_dir` are empty.
+The next step fills them in.
 
-아무 폴더에서 `claude` 를 열고 설치 스킬을 부릅니다.
+Open `claude` in any folder and call the setup skill.
 
 ```
 /lanekeeper:setup
 ```
 
-스킬은 이 순서로 진행합니다.
-다시 불러도 결과가 같습니다.
+The skill goes through these steps.
+Running it again gives the same result.
 
-1. Python 3.8 이상을 찾습니다.
-   Windows 는 `py -3` 을 먼저 보고, 없으면 `python` 을 봅니다.
-   훅이 셸 없이 실행하므로 Windows 에서는 `python.exe` 절대 경로를 설정값으로 씁니다.
-2. 허브 폴더를 묻습니다.
-   기본값은 홈 폴더 아래 `hub` 입니다.
-   `/lanekeeper:setup C:/Users/<나>/hub` 처럼 바로 줘도 됩니다.
-3. 허브 폴더를 만들고 규칙 틀과 설정 예시를 복사합니다.
-   이미 있는 파일은 덮지 않습니다.
-4. 사용자 설정(`~/.claude/settings.json`)에 `crossSessionInbound: "accept"` 가 없으면 더합니다(`examples/user.settings.json`).
-   모델 같은 다른 설정은 건드리지 않습니다.
-   있는 값은 그대로 두고, 쓰기 전에 `settings.json.bak-<시각>` 으로 백업합니다.
-5. `agents.json` 에 허브 폴더 경로를 넣고, 플러그인 설정값 `python` 과 `hub_dir` 를 넣습니다.
-6. [Addy-skills](https://github.com/holiday0726/Addy-skills) 플러그인이 없으면 설치합니다.
+1. Finds Python 3.8 or later.
+   On Windows it tries `py -3` first, then `python`.
+   Hooks run without a shell, so on Windows the setting is the absolute path to `python.exe`.
+2. Asks for the hub folder.
+   The default is `hub` under your home folder.
+   You can also pass it directly, as in `/lanekeeper:setup C:/Users/<you>/hub`.
+3. Creates the hub folder and copies the rule templates and settings examples.
+   Files that already exist are not overwritten.
+4. Adds `crossSessionInbound: "accept"` to your user settings (`~/.claude/settings.json`) if it is missing (`examples/user.settings.json`).
+   Other settings such as the model are left alone.
+   Existing values stay, and the file is backed up to `settings.json.bak-<time>` before writing.
+5. Puts the hub folder path into `agents.json`, and sets the plugin settings `python` and `hub_dir`.
+6. Asks whether to install the [Addy-skills](https://github.com/holiday0726/Addy-skills) plugin if it is missing. The default is not to install it.
 
-스킬이 끝나면 세션을 닫고 허브 폴더에서 새로 엽니다.
-설정값은 Claude Code 를 다시 열어야 적용됩니다.
+When the skill is done, close the session and open a new one in the hub folder.
+Settings take effect only after Claude Code is opened again.
 
 ```sh
 cd ~/hub
 claude
 ```
 
-세션이 열리면서 `대시보드 http://127.0.0.1:4990 떠 있음` 이 보이면 브라우저로 그 주소를 엽니다.
-허브 세션 안에서 `/rename hub` 를 입력합니다.
-그다음 [허브 폴더 만들기](#허브-폴더-만들기) 의 1, 2, 5 번대로 `<...>` 자리를 채웁니다.
+When the session opens and shows `대시보드 http://127.0.0.1:4990 떠 있음` (dashboard is up), open that address in a browser.
+In the hub session, type `/rename hub`.
+Then fill in the `<...>` spots as in steps 1, 2 and 5 of [Set up the hub folder](#set-up-the-hub-folder).
 
-새 판은 `claude plugin marketplace update lanekeeper` 와 `claude plugin update lanekeeper@lanekeeper` 로 받고, 세션을 다시 엽니다.
+To get a new version, run `claude plugin marketplace update lanekeeper` and `claude plugin update lanekeeper@lanekeeper`, then open the session again.
 
-## 옛 이름에서 옮기기
+## Moving from the old name
 
-0.3.0 까지는 플러그인과 마켓플레이스 이름이 `agent-hub`, 저장소 이름이 `claude-hub-plugin` 이었습니다.
-이름이 바뀌어 `claude plugin update` 로는 넘어오지 않으니 지우고 새로 설치합니다.
+Up to 0.3.0 the plugin and the marketplace were called `agent-hub`, and the repository was called `claude-hub-plugin`.
+Because the name changed, `claude plugin update` does not carry you over. Remove the old one and install again.
 
-1. 옛 설정값을 적어 둡니다.
-   `claude plugin configure agent-hub@agent-hub --json` 출력의 `inputs` 에 `python`, `hub_dir` 같은 값이 있습니다.
-2. 옛 플러그인과 마켓플레이스를 지웁니다.
+1. Write down the old settings.
+   The `inputs` field in the output of `claude plugin configure agent-hub@agent-hub --json` holds values such as `python` and `hub_dir`.
+2. Remove the old plugin and marketplace.
 
    ```sh
    claude plugin uninstall agent-hub@agent-hub
    claude plugin marketplace remove agent-hub
    ```
 
-3. [빠른 시작](#빠른-시작) 이나 [손으로 설치하기](#손으로-설치하기) 대로 `lanekeeper` 를 설치합니다.
-4. 설정값을 다시 넣습니다.
-   설정값은 `~/.claude/settings.json` 의 `pluginConfigs` 에 플러그인 이름별로 저장되고, 옛 플러그인을 지우면 같이 지워집니다.
-   `/lanekeeper:setup <허브 폴더>` 를 부르거나 `claude plugin configure lanekeeper@lanekeeper` 로 1 번에서 적은 값을 넣습니다.
-   허브 폴더 안의 파일은 그대로 두고 씁니다.
+3. Install `lanekeeper` as in [Quick start](#quick-start) or [Manual install](#manual-install).
+4. Enter the settings again.
+   Settings are stored per plugin name under `pluginConfigs` in `~/.claude/settings.json`, and they are deleted together with the old plugin.
+   Call `/lanekeeper:setup <hub folder>` or use `claude plugin configure lanekeeper@lanekeeper` to enter the values from step 1.
+   The files in the hub folder stay as they are.
+5. From 0.4.0 the git message check hook is off by default.
+   To keep using it, set `git_message_check` to `true` ([Settings](#settings)).
 
-데이터 폴더도 `~/.claude/plugins/data/agent-hub-agent-hub/` 에서 `~/.claude/plugins/data/lanekeeper-lanekeeper/` 로 바뀝니다.
-옛 폴더에는 대시보드 로그만 있으니 지워도 됩니다.
-저장소를 받아 손으로 설치했다면 받은 폴더의 원격 주소를 `https://github.com/holiday0726/lanekeeper.git` 로 바꿉니다(`git remote set-url origin <주소>`).
-옛 주소도 GitHub 이 새 주소로 넘겨 줍니다.
+The data folder also changes from `~/.claude/plugins/data/agent-hub-agent-hub/` to `~/.claude/plugins/data/lanekeeper-lanekeeper/`.
+The old folder holds only dashboard logs, so you can delete it.
+If you cloned the repository and installed by hand, change the remote of that folder to `https://github.com/holiday0726/lanekeeper.git` (`git remote set-url origin <url>`).
+GitHub also forwards the old address to the new one.
 
-## 손으로 설치하기
+## Manual install
 
-설치 스킬을 쓰지 않거나, 저장소를 받아 고쳐 쓰려면 이렇게 합니다.
+Use this if you do not use the setup skill, or if you want to clone the repository and change it.
 
-Claude Code, git, Python 3.8 이상이 필요합니다. 저장소 폴더가 그대로 로컬 마켓플레이스라서 받은 폴더를 마켓플레이스로 붙이고 그 안의 `lanekeeper` 플러그인을 설치합니다.
+You need Claude Code, git and Python 3.8 or later. The repository folder is itself a local marketplace, so you add the cloned folder as a marketplace and install the `lanekeeper` plugin in it.
 
 ### Windows
 
-훅은 셸을 거치지 않고 설정값 `python` 을 그대로 실행합니다. 그래서 Windows 에서는 `python.exe` 의 절대 경로를 넣습니다. PowerShell 에서 경로를 확인합니다.
+Hooks run the `python` setting directly, without a shell. So on Windows you give the absolute path to `python.exe`. Check the path in PowerShell.
 
 ```powershell
 py -3 -c "import sys; print(sys.executable)"
-# py 런처가 없으면: python -c "import sys; print(sys.executable)"
+# without the py launcher: python -c "import sys; print(sys.executable)"
 ```
 
-출력된 경로의 역슬래시를 `/` 로 바꿔 설치에 씁니다. 경로에 빈칸이 있으면 `"python=C:/Program Files/Python312/python.exe"` 처럼 따옴표로 묶습니다.
+Change the backslashes in the printed path to `/` and use it in the install. If the path has spaces, quote it like `"python=C:/Program Files/Python312/python.exe"`.
 
 ```powershell
 cd $HOME
 git clone https://github.com/holiday0726/lanekeeper.git
-claude plugin marketplace add C:/Users/<나>/lanekeeper
+claude plugin marketplace add C:/Users/<you>/lanekeeper
 claude plugin install lanekeeper@lanekeeper `
-  --config python=C:/Users/<나>/AppData/Local/Programs/Python/Python312/python.exe `
-  --config hub_dir=C:/Users/<나>/hub
+  --config python=C:/Users/<you>/AppData/Local/Programs/Python/Python312/python.exe `
+  --config hub_dir=C:/Users/<you>/hub
 ```
 
-Claude Code 세션 안에서 설치해도 됩니다. `/plugin marketplace add C:/Users/<나>/lanekeeper`, `/plugin install lanekeeper@lanekeeper` 를 차례로 입력한 뒤 `/plugin configure lanekeeper@lanekeeper` 창에서 `python` 과 `hub_dir` 를 채웁니다.
+You can also install inside a Claude Code session. Type `/plugin marketplace add C:/Users/<you>/lanekeeper` and `/plugin install lanekeeper@lanekeeper`, then fill in `python` and `hub_dir` in the `/plugin configure lanekeeper@lanekeeper` dialog.
 
 ### Linux, macOS
 
@@ -139,56 +149,57 @@ claude plugin marketplace add ~/lanekeeper
 claude plugin install lanekeeper@lanekeeper --config python=python3 --config hub_dir="$HOME/hub"
 ```
 
-### 함께 설치할 플러그인
+### Plugin to use with it (optional)
 
-허브 규칙 틀의 `CLAUDE.md` "스킬 쓰는 때" 절은 [Addy-skills](https://github.com/holiday0726/Addy-skills) 플러그인의 스킬을 부릅니다.
-배정과 보고를 감독하는 스킬 일곱 개(`addy-skills:agent-oversight` 와 그 아래 스킬)입니다.
-`STATUS.md` 의 네 원칙과 `COORDINATION.md` 의 보고 형식도 이 스킬을 따릅니다.
-lanekeeper 와 함께 설치합니다.
+The "스킬 쓰는 때" (when to use skills) section of the hub template `CLAUDE.md` calls skills from the [Addy-skills](https://github.com/holiday0726/Addy-skills) plugin.
+These are seven skills that oversee assignments and reports (`addy-skills:agent-oversight` and the skills under it).
+The four principles in `STATUS.md` and the report format in `COORDINATION.md` also follow these skills.
+Installing it is optional. Without it, the hub skips that section.
 
 ```sh
 claude plugin install addy-skills --marketplace holiday0726/Addy-skills
 ```
 
-Claude Code 세션 안에서는 이렇게 입력합니다.
+Inside a Claude Code session, type this.
 
 ```
 /plugin install addy-skills --marketplace holiday0726/Addy-skills
 ```
 
-`claude plugin details addy-skills@addy-skills` 에 스킬 일곱 개가 보이면 설치된 것입니다.
+If `claude plugin details addy-skills@addy-skills` lists seven skills, it is installed.
 
-### 설치 확인과 갱신
+### Check the install and update
 
 ```sh
-claude plugin details lanekeeper@lanekeeper    # Skills (3), Hooks (2) 가 보이면 설치된 것
+claude plugin details lanekeeper@lanekeeper    # installed if it shows Skills (3), Hooks (2)
 ```
 
-플러그인은 받은 폴더를 그대로 읽습니다. 설치한 뒤에는 그 폴더를 옮기거나 지우지 마세요. 새 판을 받을 때는 그 폴더에서 `git pull` 한 뒤 세션을 다시 열거나 세션 안에서 `/reload-plugins` 를 입력합니다.
+The plugin reads the cloned folder in place. Do not move or delete that folder after installing. To get a new version, run `git pull` in that folder and open the session again, or type `/reload-plugins` in the session.
 
-인터넷이 안 되는 PC 라면 다른 곳에서 묶어 옮깁니다.
+For a PC without internet access, pack it somewhere else and carry it over.
 
 ```sh
 cd lanekeeper
-git bundle create ../lanekeeper.bundle HEAD main      # 받는 쪽: git clone lanekeeper.bundle lanekeeper
-git archive --format=zip -o ../lanekeeper.zip main    # 받는 쪽: 압축을 풀기만 하면 됨
+git bundle create ../lanekeeper.bundle HEAD main      # receiving side: git clone lanekeeper.bundle lanekeeper
+git archive --format=zip -o ../lanekeeper.zip main    # receiving side: just unzip it
 ```
 
-### 설정값
+### Settings
 
-설치할 때 `--config 키=값` 으로 주고, 나중에는 `claude plugin configure lanekeeper@lanekeeper` 나 세션 안 `/plugin configure lanekeeper@lanekeeper` 로 바꿉니다.
+Pass them with `--config key=value` when installing, and change them later with `claude plugin configure lanekeeper@lanekeeper` or `/plugin configure lanekeeper@lanekeeper` inside a session.
 
-| 키 | 필수 | 뜻 | 기본값 |
+| Key | Required | Meaning | Default |
 |---|---|---|---|
-| `python` | 예 | 훅을 돌릴 Python 3 명령. Linux 와 macOS 는 `python3`, Windows 는 `python.exe` 절대 경로 | 없음 |
-| `hub_dir` | 예 | 허브 폴더의 절대 경로. Windows 는 `C:/Users/<나>/hub` 처럼 `/` 로 씁니다 | 없음 |
-| `dashboard_port` | 아니오 | 대시보드 포트. 주소는 늘 `127.0.0.1` 입니다 | `4990` |
-| `orca` | 아니오 | 허브 세션을 열 때 Orca 브라우저 탭으로 대시보드를 열지 | 켬(`orca` 명령이 있을 때만) |
+| `python` | Yes | Python 3 command that runs the hooks. `python3` on Linux and macOS, the absolute path to `python.exe` on Windows | none |
+| `hub_dir` | Yes | Absolute path to the hub folder. On Windows write it with `/`, as in `C:/Users/<you>/hub` | none |
+| `dashboard_port` | No | Dashboard port. The address is always `127.0.0.1` | `4990` |
+| `orca` | No | Whether to open the dashboard in an Orca browser tab when the hub session opens | on (only if the `orca` command exists) |
+| `git_message_check` | No | Whether to turn on the git message check hook. To turn it on, add `--config git_message_check=true` to `claude plugin install`, or set `true` with `claude plugin configure lanekeeper@lanekeeper` | off |
 
-## 허브 폴더 만들기
+## Set up the hub folder
 
-허브 폴더는 허브 세션을 여는 폴더이고, 설정값 `hub_dir` 와 같은 경로여야 합니다. 규칙 틀과 설정 예시를 복사합니다.
-`/lanekeeper:setup` 을 썼다면 아래 복사와 3, 4 번은 이미 되어 있습니다.
+The hub folder is where you open the hub session, and it must be the same path as the `hub_dir` setting. Copy the rule templates and settings examples into it.
+If you used `/lanekeeper:setup`, the copy below and steps 3 and 4 are already done.
 
 Linux, macOS:
 
@@ -202,108 +213,108 @@ cp ~/lanekeeper/examples/supervisor.settings.json ~/hub/supervisor.settings.json
 Windows PowerShell:
 
 ```powershell
-$hub = "C:\Users\<나>\hub"; $src = "C:\Users\<나>\lanekeeper"
+$hub = "C:\Users\<you>\hub"; $src = "C:\Users\<you>\lanekeeper"
 New-Item -ItemType Directory -Force "$hub\.claude" | Out-Null
 Copy-Item "$src\templates\hub\*" $hub
 Copy-Item "$src\examples\hub.settings.json" "$hub\.claude\settings.json"
 Copy-Item "$src\examples\supervisor.settings.json" "$hub\supervisor.settings.json"
 ```
 
-복사한 뒤 프로젝트에 맞게 채웁니다. 권한과 기본 모델은 플러그인이 넣어 줄 수 없어서 이렇게 예시 파일로 둡니다.
+After copying, fill them in for your project. A plugin cannot set permissions or the default model, so they come as example files.
 
-1. `.claude/settings.json`: 허브 세션의 모델과 권한입니다. `deny` 의 `<레인 저장소>` 자리에 허브가 직접 고치면 안 되는 저장소를, `additionalDirectories` 에 그 저장소들의 상위 폴더를 넣습니다.
-2. `supervisor.settings.json`: 허브가 슈퍼바이저 세션을 띄울 때 `--settings` 로 붙이는 파일입니다. 슈퍼바이저에게 허락할 일을 `autoMode.allow` 에 문장으로 적습니다.
-3. 사용자 설정(`~/.claude/settings.json`, Windows 는 `%USERPROFILE%\.claude\settings.json`)에 `examples/user.settings.json` 의 키를 손으로 합칩니다. `crossSessionInbound: "accept"` 가 있어야 세션 사이 메시지가 승인 대기 없이 바로 전달됩니다.
-4. `agents.json` 의 `resident.hub.cwd` 에 허브 폴더 경로를 넣고, 허브 세션 안에서 `/rename hub` 로 이름을 맞춥니다. 대시보드는 이 파일에서 `lane` 이 `HUB` 인 세션을 허브로 봅니다.
-5. `CLAUDE.md` 와 `COORDINATION.md` 의 `<...>` 자리에 레인, 저장소, 인터페이스를 적습니다.
+1. `.claude/settings.json`: model and permissions of the hub session. Put the repositories the hub must not edit directly into the `<레인 저장소>` (lane repository) spot under `deny`, and their parent folders into `additionalDirectories`.
+2. `supervisor.settings.json`: the file the hub attaches with `--settings` when it starts a supervisor session. Write what the supervisor is allowed to do as sentences in `autoMode.allow`.
+3. Merge the keys of `examples/user.settings.json` into your user settings (`~/.claude/settings.json`, on Windows `%USERPROFILE%\.claude\settings.json`) by hand. `crossSessionInbound: "accept"` lets messages between sessions arrive without waiting for approval.
+4. Put the hub folder path into `resident.hub.cwd` in `agents.json`, and match the name with `/rename hub` inside the hub session. The dashboard treats the session whose `lane` is `HUB` in this file as the hub.
+5. Fill in lanes, repositories and interfaces at the `<...>` spots in `CLAUDE.md` and `COORDINATION.md`.
 
-## 대시보드
+## Dashboard
 
-허브 폴더의 `agents.json`, `decisions.json`, `STATUS.md`, `dev-occupancy.json` 과 `~/.claude` 아래 세션 기록을 몇 초마다 읽어 보여 줍니다. 읽기만 하고, 세션에 입력을 보내거나 멈추지 않습니다.
+Every few seconds it reads `agents.json`, `decisions.json`, `STATUS.md` and `dev-occupancy.json` in the hub folder, plus the session records under `~/.claude`, and shows them. It only reads. It does not send input to sessions or stop them.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/dashboard-dark.png">
-  <img alt="대시보드 에이전트 탭: 위에 사용량과 dev 점유 줄, 아래에 진행 중, 입력 대기 세션 카드" src="docs/images/dashboard-light.png" width="480">
+  <img alt="Dashboard Agents tab: usage and dev occupancy bars at the top, cards for running sessions and sessions waiting for input below" src="docs/images/dashboard-light.png" width="480">
 </picture>
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/dashboard-flow-dark.png">
-  <img alt="대시보드 흐름 탭: 허브를 가운데 두고 세션 사이에 오간 배정과 보고를 그린 그래프" src="docs/images/dashboard-flow-light.png" width="480">
+  <img alt="Dashboard Flow tab: a graph with the hub in the middle and the assignments and reports exchanged between sessions" src="docs/images/dashboard-flow-light.png" width="480">
 </picture>
 
-화면의 세션과 데이터는 설명용 견본입니다.
+The sessions and data on screen are samples for illustration.
 
-| 탭 | 보여 주는 것 |
+| Tab | What it shows |
 |---|---|
-| 에이전트 | 세션을 진행 중, 입력 대기, 종료로 나눈 카드. 누르면 대화 기록과 `claude logs` 화면 |
-| 결정 | `decisions.json` 의 결정 항목과 지금 사용자 입력을 기다리는 세션 |
-| 현황 | `STATUS.md` |
-| 흐름 | 세션 사이 `SendMessage` 를 그래프와 목록으로. `[배정]`, `[보고]`, `[알림]` 머리말로 종류를 나눕니다 |
-| 할 일 | 세션별 할 일 목록 |
+| 에이전트 (Agents) | Session cards split into running, waiting for input and finished. Click one to see its conversation and the `claude logs` view |
+| 결정 (Decisions) | Decision items from `decisions.json` and sessions waiting for user input right now |
+| 현황 (Status) | `STATUS.md` |
+| 흐름 (Flow) | `SendMessage` between sessions as a graph and a list. The prefixes `[배정]`, `[보고]` and `[알림]` tell the kinds apart |
+| 할 일 (To do) | To do list per session |
 
-허브 폴더에서 세션을 열면 훅이 대시보드를 띄워 주므로 따로 실행할 일은 없습니다. 손으로 띄울 때는 허브 폴더와 포트를 환경변수로 줍니다.
+When you open a session in the hub folder, the hook starts the dashboard for you, so there is nothing else to run. To start it by hand, pass the hub folder and port as environment variables.
 
 ```sh
 HUB_DIR=~/hub PORT=4990 python3 ~/lanekeeper/dashboard/server.py
 ```
 
 ```powershell
-$env:HUB_DIR = "C:\Users\<나>\hub"; $env:PORT = "4990"; py -3 C:\Users\<나>\lanekeeper\dashboard\server.py
+$env:HUB_DIR = "C:\Users\<you>\hub"; $env:PORT = "4990"; py -3 C:\Users\<you>\lanekeeper\dashboard\server.py
 ```
 
-훅이 띄운 서버의 로그는 `~/.claude/plugins/data/lanekeeper-lanekeeper/dashboard-<포트>.log` 에 남고, 첫 줄에 서버 pid 가 있습니다. 끌 때는 그 pid 로 `kill <pid>`(Windows 는 `Stop-Process -Id <pid>`)를 실행합니다. 화면 하나하나의 설명은 [dashboard/README.md](dashboard/README.md) 에 있습니다.
+The log of a server started by the hook is at `~/.claude/plugins/data/lanekeeper-lanekeeper/dashboard-<port>.log`, and its first line has the server pid. To stop it, run `kill <pid>` (on Windows `Stop-Process -Id <pid>`). Each screen is described in [dashboard/README.md](dashboard/README.md) (Korean).
 
-## 훅
+## Hooks
 
-`hooks/hooks.json` 은 셸을 거치지 않는 형식이라 Windows 에서 Git Bash 를 쓰든 PowerShell 을 쓰든 똑같이 돕니다. 훅 스크립트는 모두 Python 입니다.
+`hooks/hooks.json` uses the form that does not go through a shell, so it works the same on Windows with Git Bash or PowerShell. All hook scripts are Python.
 
-| 훅 | 언제 | 하는 일 |
+| Hook | When | What it does |
 |---|---|---|
-| 대시보드 열기 (`open_dashboard.py`) | 세션 시작(SessionStart) | 프로젝트 폴더가 `hub_dir` 이거나 그 아래일 때만 동작합니다. 대시보드가 꺼져 있으면 띄우고, `orca` 가 켜져 있으면 Orca 탭으로 엽니다 |
-| 허브 폴더 보호 (`hub_only_write.py`) | Edit, Write, NotebookEdit 직전 | 허브 폴더 밖에서 연 세션이 허브 폴더의 파일을 고치려 하면 막고, 허브에 보고하라고 알립니다. Windows 경로는 대소문자와 역슬래시, `/c/` 꼴을 같은 경로로 봅니다 |
-| git 문구 검사 (`git-message-style.py`) | Bash, PowerShell 명령 직전 | `git commit`, `merge`, `tag`, `revert` 와 `gh pr create`, `edit` 문구가 개조식 규칙을 어기면 막습니다. 잠시 끄려면 환경변수 `CLAUDE_GIT_STYLE=off` |
+| Open dashboard (`open_dashboard.py`) | Session start (SessionStart) | Acts only when the project folder is `hub_dir` or inside it. Starts the dashboard if it is not running, and opens it in an Orca tab if `orca` is on |
+| Protect hub folder (`hub_only_write.py`) | Before Edit, Write, NotebookEdit | Blocks a session opened outside the hub folder from editing files in the hub folder, and tells it to report to the hub. Windows paths with different case, backslashes or the `/c/` form count as the same path |
+| Git message check (`git-message-style.py`) | Before Bash and PowerShell commands | Blocks `git commit`, `merge`, `tag`, `revert` and `gh pr create`, `edit` when the message breaks the bullet style rules. Off by default; set `git_message_check` to `true` to turn it on. Once on, set the environment variable `CLAUDE_GIT_STYLE=off` to pause it |
 
-## 스킬
+## Skills
 
-| 스킬 | 부르는 법 | 쓰임 |
+| Skill | How to call | Use |
 |---|---|---|
-| setup | `/lanekeeper:setup [허브 폴더]` | 설치를 마무리합니다. 허브 폴더를 만들고 사용자 설정과 플러그인 설정값을 채웁니다. [빠른 시작](#빠른-시작) 참고 |
-| humanizer | `/lanekeeper:humanizer` | AI 가 쓴 티가 나는 문장을 고칩니다. 허브의 `STATUS.md` 와 결정 문구를 다듬을 때 씁니다 |
-| git-message | `/lanekeeper:git-message` | 커밋, 머지, PR 문구를 개조식으로 쓰는 규칙. git 문구 검사 훅이 막았을 때 같이 봅니다 |
+| setup | `/lanekeeper:setup [hub folder]` | Finishes the install. Creates the hub folder and fills in user settings and plugin settings. See [Quick start](#quick-start) |
+| humanizer | `/lanekeeper:humanizer` | Fixes text that reads as written by AI. Used to polish the hub's `STATUS.md` and decision text |
+| git-message | `/lanekeeper:git-message` | Rules for writing commit, merge and PR messages as bullets. Read it together with the git message check hook when the hook blocks you |
 
-## 저장소 구조
+## Repository layout
 
 ```
 .claude-plugin/   plugin.json, marketplace.json
 dashboard/        server.py, index.html, test_server.py, vendor/
-docs/             README 그림(images/)과 그림 원본(diagrams/)
+docs/             README images (images/) and their sources (diagrams/)
 examples/         hub.settings.json, supervisor.settings.json, user.settings.json
 hooks/            hooks.json, open_dashboard.py, hub_only_write.py, git-message-style.py, hubpath.py
 scripts/          setup_hub.py
 skills/           setup/, humanizer/, git-message/
 templates/hub/    CLAUDE.md, COORDINATION.md, STATUS.md, agents.json, decisions.json, dev-occupancy.json
-tests/            훅과 설치 스크립트 시험
+tests/            tests for the hooks and the install script
 ```
 
-## 시험 돌리기
+## Running the tests
 
 ```sh
-python3 dashboard/test_server.py        # 대시보드 서버
-python3 tests/test_hub_only_write.py    # 허브 폴더 보호, Windows 경로 꼴 포함
-python3 tests/test_style_basic.py       # git 문구 기본 규칙
-python3 tests/test_style_multi.py       # 한 명령에 git 명령이 여럿일 때
-python3 tests/test_open_dashboard.py    # 대시보드 열기 훅, 빈 포트에 서버를 띄웠다가 끕니다
-python3 tests/test_setup_hub.py         # 설치 스크립트, 임시 폴더와 가짜 HOME 으로만 돕니다
-claude plugin validate --strict .       # 매니페스트 검사
+python3 dashboard/test_server.py        # dashboard server
+python3 tests/test_hub_only_write.py    # hub folder protection, including Windows path forms
+python3 tests/test_style_basic.py       # git message basic rules and the on/off setting
+python3 tests/test_style_multi.py       # several git commands in one call
+python3 tests/test_open_dashboard.py    # open dashboard hook, starts a server on a free port and stops it
+python3 tests/test_setup_hub.py         # install script, runs only on temp folders and a fake HOME
+claude plugin validate --strict .       # manifest check
 ```
 
-Windows 에서는 `python3` 자리에 `py -3` 을 씁니다. 훅 시험은 Windows 한국어 로캘과 같은 조건(표준 입출력 기본값 cp949)으로 돌아갑니다.
+On Windows use `py -3` in place of `python3`. The hook tests run under the same conditions as a Korean Windows locale (standard I/O default cp949).
 
-## 라이선스와 출처
+## License and credits
 
-MIT 라이선스입니다([LICENSE](LICENSE)). 함께 넣은 것은 각자의 라이선스를 따릅니다.
+MIT license ([LICENSE](LICENSE)). Bundled parts follow their own licenses.
 
 - `skills/humanizer`: [blader/humanizer](https://github.com/blader/humanizer), MIT, `skills/humanizer/LICENSE`
 - `dashboard/vendor/xterm.js`, `xterm.css`: [xterm.js](https://github.com/xtermjs/xterm.js) 5.5.0, MIT, `dashboard/vendor/xterm-LICENSE`
 - `dashboard/vendor/WantedSansVariable.woff2`: [Wanted Sans](https://github.com/wanteddev/wanted-sans) 1.0.3, SIL OFL 1.1, `dashboard/vendor/WantedSans-OFL.txt`
 
-README 의 구성도는 diagram-design, 순서도는 [Archify](https://github.com/tt-a1i/archify) 로 그렸고 원본은 `docs/diagrams/` 에 있습니다.
+The architecture diagram was drawn with diagram-design and the sequence diagram with [Archify](https://github.com/tt-a1i/archify). Sources are in `docs/diagrams/`.
