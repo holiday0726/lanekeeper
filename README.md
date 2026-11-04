@@ -1,10 +1,10 @@
-# agent-hub
+# lanekeeper
 
 Claude Code 세션 하나를 허브로 두고, 허브가 다른 세션들에 일을 나눠 맡기고 보고를 받아 기록하게 만드는 플러그인입니다. 허브가 따를 규칙 문서 틀과 세션 현황을 보는 로컬 대시보드, 허브 폴더를 지키는 훅이 함께 들어 있습니다.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.png">
-  <img alt="agent-hub 구성도: 사용자가 허브 세션에 지시하고, 허브가 슈퍼바이저와 작업 세션에 배정합니다. 허브는 허브 폴더에 기록하고 대시보드가 그 폴더를 읽습니다. 플러그인 훅 세 개가 허브 폴더 보호, 대시보드 열기, git 문구 검사를 맡습니다." src="docs/images/architecture-light.png" width="800">
+  <img alt="lanekeeper 구성도: 사용자가 허브 세션에 지시하고, 허브가 슈퍼바이저와 작업 세션에 배정합니다. 허브는 허브 폴더에 기록하고 대시보드가 그 폴더를 읽습니다. 플러그인 훅 세 개가 허브 폴더 보호, 대시보드 열기, git 문구 검사를 맡습니다." src="docs/images/architecture-light.png" width="800">
 </picture>
 
 ## 무엇이 들어 있나
@@ -35,7 +35,7 @@ Windows, Linux, macOS 모두 같은 방법입니다.
 터미널(Windows 는 PowerShell)에서 GitHub 마켓플레이스로 플러그인을 설치합니다.
 
 ```sh
-claude plugin install agent-hub --marketplace holiday0726/claude-hub-plugin
+claude plugin install lanekeeper --marketplace holiday0726/lanekeeper
 ```
 
 설치가 끝나면 설정값 `python` 과 `hub_dir` 가 비어 있다는 안내가 나옵니다.
@@ -44,7 +44,7 @@ claude plugin install agent-hub --marketplace holiday0726/claude-hub-plugin
 아무 폴더에서 `claude` 를 열고 설치 스킬을 부릅니다.
 
 ```
-/agent-hub:setup
+/lanekeeper:setup
 ```
 
 스킬은 이 순서로 진행합니다.
@@ -55,7 +55,7 @@ claude plugin install agent-hub --marketplace holiday0726/claude-hub-plugin
    훅이 셸 없이 실행하므로 Windows 에서는 `python.exe` 절대 경로를 설정값으로 씁니다.
 2. 허브 폴더를 묻습니다.
    기본값은 홈 폴더 아래 `hub` 입니다.
-   `/agent-hub:setup C:/Users/<나>/hub` 처럼 바로 줘도 됩니다.
+   `/lanekeeper:setup C:/Users/<나>/hub` 처럼 바로 줘도 됩니다.
 3. 허브 폴더를 만들고 규칙 틀과 설정 예시를 복사합니다.
    이미 있는 파일은 덮지 않습니다.
 4. 사용자 설정(`~/.claude/settings.json`)에 `crossSessionInbound: "accept"` 가 없으면 더합니다(`examples/user.settings.json`).
@@ -76,13 +76,38 @@ claude
 허브 세션 안에서 `/rename hub` 를 입력합니다.
 그다음 [허브 폴더 만들기](#허브-폴더-만들기) 의 1, 2, 5 번대로 `<...>` 자리를 채웁니다.
 
-새 판은 `claude plugin marketplace update agent-hub` 와 `claude plugin update agent-hub@agent-hub` 로 받고, 세션을 다시 엽니다.
+새 판은 `claude plugin marketplace update lanekeeper` 와 `claude plugin update lanekeeper@lanekeeper` 로 받고, 세션을 다시 엽니다.
+
+## 옛 이름에서 옮기기
+
+0.3.0 까지는 플러그인과 마켓플레이스 이름이 `agent-hub`, 저장소 이름이 `claude-hub-plugin` 이었습니다.
+이름이 바뀌어 `claude plugin update` 로는 넘어오지 않으니 지우고 새로 설치합니다.
+
+1. 옛 설정값을 적어 둡니다.
+   `claude plugin configure agent-hub@agent-hub --json` 출력의 `inputs` 에 `python`, `hub_dir` 같은 값이 있습니다.
+2. 옛 플러그인과 마켓플레이스를 지웁니다.
+
+   ```sh
+   claude plugin uninstall agent-hub@agent-hub
+   claude plugin marketplace remove agent-hub
+   ```
+
+3. [빠른 시작](#빠른-시작) 이나 [손으로 설치하기](#손으로-설치하기) 대로 `lanekeeper` 를 설치합니다.
+4. 설정값을 다시 넣습니다.
+   설정값은 `~/.claude/settings.json` 의 `pluginConfigs` 에 플러그인 이름별로 저장되고, 옛 플러그인을 지우면 같이 지워집니다.
+   `/lanekeeper:setup <허브 폴더>` 를 부르거나 `claude plugin configure lanekeeper@lanekeeper` 로 1 번에서 적은 값을 넣습니다.
+   허브 폴더 안의 파일은 그대로 두고 씁니다.
+
+데이터 폴더도 `~/.claude/plugins/data/agent-hub-agent-hub/` 에서 `~/.claude/plugins/data/lanekeeper-lanekeeper/` 로 바뀝니다.
+옛 폴더에는 대시보드 로그만 있으니 지워도 됩니다.
+저장소를 받아 손으로 설치했다면 받은 폴더의 원격 주소를 `https://github.com/holiday0726/lanekeeper.git` 로 바꿉니다(`git remote set-url origin <주소>`).
+옛 주소도 GitHub 이 새 주소로 넘겨 줍니다.
 
 ## 손으로 설치하기
 
 설치 스킬을 쓰지 않거나, 저장소를 받아 고쳐 쓰려면 이렇게 합니다.
 
-Claude Code, git, Python 3.8 이상이 필요합니다. 저장소 폴더가 그대로 로컬 마켓플레이스라서 받은 폴더를 마켓플레이스로 붙이고 그 안의 `agent-hub` 플러그인을 설치합니다.
+Claude Code, git, Python 3.8 이상이 필요합니다. 저장소 폴더가 그대로 로컬 마켓플레이스라서 받은 폴더를 마켓플레이스로 붙이고 그 안의 `lanekeeper` 플러그인을 설치합니다.
 
 ### Windows
 
@@ -97,21 +122,21 @@ py -3 -c "import sys; print(sys.executable)"
 
 ```powershell
 cd $HOME
-git clone https://github.com/holiday0726/claude-hub-plugin.git
-claude plugin marketplace add C:/Users/<나>/claude-hub-plugin
-claude plugin install agent-hub@agent-hub `
+git clone https://github.com/holiday0726/lanekeeper.git
+claude plugin marketplace add C:/Users/<나>/lanekeeper
+claude plugin install lanekeeper@lanekeeper `
   --config python=C:/Users/<나>/AppData/Local/Programs/Python/Python312/python.exe `
   --config hub_dir=C:/Users/<나>/hub
 ```
 
-Claude Code 세션 안에서 설치해도 됩니다. `/plugin marketplace add C:/Users/<나>/claude-hub-plugin`, `/plugin install agent-hub@agent-hub` 를 차례로 입력한 뒤 `/plugin configure agent-hub@agent-hub` 창에서 `python` 과 `hub_dir` 를 채웁니다.
+Claude Code 세션 안에서 설치해도 됩니다. `/plugin marketplace add C:/Users/<나>/lanekeeper`, `/plugin install lanekeeper@lanekeeper` 를 차례로 입력한 뒤 `/plugin configure lanekeeper@lanekeeper` 창에서 `python` 과 `hub_dir` 를 채웁니다.
 
 ### Linux, macOS
 
 ```sh
-git clone https://github.com/holiday0726/claude-hub-plugin.git ~/claude-hub-plugin
-claude plugin marketplace add ~/claude-hub-plugin
-claude plugin install agent-hub@agent-hub --config python=python3 --config hub_dir="$HOME/hub"
+git clone https://github.com/holiday0726/lanekeeper.git ~/lanekeeper
+claude plugin marketplace add ~/lanekeeper
+claude plugin install lanekeeper@lanekeeper --config python=python3 --config hub_dir="$HOME/hub"
 ```
 
 ### 함께 설치할 플러그인
@@ -119,7 +144,7 @@ claude plugin install agent-hub@agent-hub --config python=python3 --config hub_d
 허브 규칙 틀의 `CLAUDE.md` "스킬 쓰는 때" 절은 [Addy-skills](https://github.com/holiday0726/Addy-skills) 플러그인의 스킬을 부릅니다.
 배정과 보고를 감독하는 스킬 일곱 개(`addy-skills:agent-oversight` 와 그 아래 스킬)입니다.
 `STATUS.md` 의 네 원칙과 `COORDINATION.md` 의 보고 형식도 이 스킬을 따릅니다.
-agent-hub 와 함께 설치합니다.
+lanekeeper 와 함께 설치합니다.
 
 ```sh
 claude plugin install addy-skills --marketplace holiday0726/Addy-skills
@@ -136,7 +161,7 @@ Claude Code 세션 안에서는 이렇게 입력합니다.
 ### 설치 확인과 갱신
 
 ```sh
-claude plugin details agent-hub@agent-hub    # Skills (3), Hooks (2) 가 보이면 설치된 것
+claude plugin details lanekeeper@lanekeeper    # Skills (3), Hooks (2) 가 보이면 설치된 것
 ```
 
 플러그인은 받은 폴더를 그대로 읽습니다. 설치한 뒤에는 그 폴더를 옮기거나 지우지 마세요. 새 판을 받을 때는 그 폴더에서 `git pull` 한 뒤 세션을 다시 열거나 세션 안에서 `/reload-plugins` 를 입력합니다.
@@ -144,14 +169,14 @@ claude plugin details agent-hub@agent-hub    # Skills (3), Hooks (2) 가 보이�
 인터넷이 안 되는 PC 라면 다른 곳에서 묶어 옮깁니다.
 
 ```sh
-cd claude-hub-plugin
-git bundle create ../agent-hub.bundle HEAD main      # 받는 쪽: git clone agent-hub.bundle claude-hub-plugin
-git archive --format=zip -o ../agent-hub.zip main    # 받는 쪽: 압축을 풀기만 하면 됨
+cd lanekeeper
+git bundle create ../lanekeeper.bundle HEAD main      # 받는 쪽: git clone lanekeeper.bundle lanekeeper
+git archive --format=zip -o ../lanekeeper.zip main    # 받는 쪽: 압축을 풀기만 하면 됨
 ```
 
 ### 설정값
 
-설치할 때 `--config 키=값` 으로 주고, 나중에는 `claude plugin configure agent-hub@agent-hub` 나 세션 안 `/plugin configure agent-hub@agent-hub` 로 바꿉니다.
+설치할 때 `--config 키=값` 으로 주고, 나중에는 `claude plugin configure lanekeeper@lanekeeper` 나 세션 안 `/plugin configure lanekeeper@lanekeeper` 로 바꿉니다.
 
 | 키 | 필수 | 뜻 | 기본값 |
 |---|---|---|---|
@@ -163,21 +188,21 @@ git archive --format=zip -o ../agent-hub.zip main    # 받는 쪽: 압축을 풀
 ## 허브 폴더 만들기
 
 허브 폴더는 허브 세션을 여는 폴더이고, 설정값 `hub_dir` 와 같은 경로여야 합니다. 규칙 틀과 설정 예시를 복사합니다.
-`/agent-hub:setup` 을 썼다면 아래 복사와 3, 4 번은 이미 되어 있습니다.
+`/lanekeeper:setup` 을 썼다면 아래 복사와 3, 4 번은 이미 되어 있습니다.
 
 Linux, macOS:
 
 ```sh
 mkdir -p ~/hub/.claude
-cp ~/claude-hub-plugin/templates/hub/* ~/hub/
-cp ~/claude-hub-plugin/examples/hub.settings.json ~/hub/.claude/settings.json
-cp ~/claude-hub-plugin/examples/supervisor.settings.json ~/hub/supervisor.settings.json
+cp ~/lanekeeper/templates/hub/* ~/hub/
+cp ~/lanekeeper/examples/hub.settings.json ~/hub/.claude/settings.json
+cp ~/lanekeeper/examples/supervisor.settings.json ~/hub/supervisor.settings.json
 ```
 
 Windows PowerShell:
 
 ```powershell
-$hub = "C:\Users\<나>\hub"; $src = "C:\Users\<나>\claude-hub-plugin"
+$hub = "C:\Users\<나>\hub"; $src = "C:\Users\<나>\lanekeeper"
 New-Item -ItemType Directory -Force "$hub\.claude" | Out-Null
 Copy-Item "$src\templates\hub\*" $hub
 Copy-Item "$src\examples\hub.settings.json" "$hub\.claude\settings.json"
@@ -218,14 +243,14 @@ Copy-Item "$src\examples\supervisor.settings.json" "$hub\supervisor.settings.jso
 허브 폴더에서 세션을 열면 훅이 대시보드를 띄워 주므로 따로 실행할 일은 없습니다. 손으로 띄울 때는 허브 폴더와 포트를 환경변수로 줍니다.
 
 ```sh
-HUB_DIR=~/hub PORT=4990 python3 ~/claude-hub-plugin/dashboard/server.py
+HUB_DIR=~/hub PORT=4990 python3 ~/lanekeeper/dashboard/server.py
 ```
 
 ```powershell
-$env:HUB_DIR = "C:\Users\<나>\hub"; $env:PORT = "4990"; py -3 C:\Users\<나>\claude-hub-plugin\dashboard\server.py
+$env:HUB_DIR = "C:\Users\<나>\hub"; $env:PORT = "4990"; py -3 C:\Users\<나>\lanekeeper\dashboard\server.py
 ```
 
-훅이 띄운 서버의 로그는 `~/.claude/plugins/data/agent-hub-agent-hub/dashboard-<포트>.log` 에 남고, 첫 줄에 서버 pid 가 있습니다. 끌 때는 그 pid 로 `kill <pid>`(Windows 는 `Stop-Process -Id <pid>`)를 실행합니다. 화면 하나하나의 설명은 [dashboard/README.md](dashboard/README.md) 에 있습니다.
+훅이 띄운 서버의 로그는 `~/.claude/plugins/data/lanekeeper-lanekeeper/dashboard-<포트>.log` 에 남고, 첫 줄에 서버 pid 가 있습니다. 끌 때는 그 pid 로 `kill <pid>`(Windows 는 `Stop-Process -Id <pid>`)를 실행합니다. 화면 하나하나의 설명은 [dashboard/README.md](dashboard/README.md) 에 있습니다.
 
 ## 훅
 
@@ -241,9 +266,9 @@ $env:HUB_DIR = "C:\Users\<나>\hub"; $env:PORT = "4990"; py -3 C:\Users\<나>\cl
 
 | 스킬 | 부르는 법 | 쓰임 |
 |---|---|---|
-| setup | `/agent-hub:setup [허브 폴더]` | 설치를 마무리합니다. 허브 폴더를 만들고 사용자 설정과 플러그인 설정값을 채웁니다. [빠른 시작](#빠른-시작) 참고 |
-| humanizer | `/agent-hub:humanizer` | AI 가 쓴 티가 나는 문장을 고칩니다. 허브의 `STATUS.md` 와 결정 문구를 다듬을 때 씁니다 |
-| git-message | `/agent-hub:git-message` | 커밋, 머지, PR 문구를 개조식으로 쓰는 규칙. git 문구 검사 훅이 막았을 때 같이 봅니다 |
+| setup | `/lanekeeper:setup [허브 폴더]` | 설치를 마무리합니다. 허브 폴더를 만들고 사용자 설정과 플러그인 설정값을 채웁니다. [빠른 시작](#빠른-시작) 참고 |
+| humanizer | `/lanekeeper:humanizer` | AI 가 쓴 티가 나는 문장을 고칩니다. 허브의 `STATUS.md` 와 결정 문구를 다듬을 때 씁니다 |
+| git-message | `/lanekeeper:git-message` | 커밋, 머지, PR 문구를 개조식으로 쓰는 규칙. git 문구 검사 훅이 막았을 때 같이 봅니다 |
 
 ## 저장소 구조
 

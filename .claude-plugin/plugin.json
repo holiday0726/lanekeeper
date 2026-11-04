@@ -1,13 +1,13 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
-  "name": "agent-hub",
-  "version": "0.3.0",
+  "name": "lanekeeper",
+  "version": "0.4.0",
   "description": "허브와 슈퍼바이저 체계: 에이전트 대시보드, 허브 폴더 쓰기 보호와 git 문구 검사 훅, 설치 스킬 setup, humanizer와 git-message 스킬",
   "author": {
     "name": "holiday0726"
   },
   "license": "MIT",
-  "keywords": ["hub", "supervisor", "dashboard", "hooks"],
+  "keywords": ["hub", "supervisor", "dashboard", "hooks", "claude-code"],
   "userConfig": {
     "python": {
       "type": "string",

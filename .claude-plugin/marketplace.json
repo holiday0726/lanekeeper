@@ -1,15 +1,15 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
-  "name": "agent-hub",
+  "name": "lanekeeper",
   "description": "허브와 슈퍼바이저 체계 플러그인 하나를 담은 로컬 마켓플레이스",
   "owner": {
     "name": "holiday0726"
   },
   "plugins": [
     {
-      "name": "agent-hub",
+      "name": "lanekeeper",
       "source": "./",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "description": "에이전트 대시보드, 허브 폴더 쓰기 보호와 git 문구 검사 훅, 설치 스킬 setup, humanizer와 git-message 스킬",
       "license": "MIT"
     }

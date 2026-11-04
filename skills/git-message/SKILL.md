@@ -5,7 +5,7 @@ description: Use when writing or rewriting a git commit message, merge/squash co
 
 # git 문구 작성 규칙
 
-커밋·머지·태그·PR 문구는 **개조식**으로 쓴다. 읽는 사람이 훑고 필요한 줄만 고르게 한다.
+커밋, 머지, 태그, PR 문구는 **개조식**으로 쓴다. 읽는 사람이 훑고 필요한 줄만 고르게 한다.
 
 ## 규칙
 
@@ -20,9 +20,9 @@ description: Use when writing or rewriting a git commit message, merge/squash co
 
 ## 본문에 넣을 것
 
-- **무엇이 바뀌었나** — 파일명이 아니라 동작과 수치로
-- **왜 바꿨나** — 진단이 자명하지 않을 때만
-- **확인한 근거** — 행 수, 테스트 결과, 재실행 결과
+- **무엇이 바뀌었나**: 파일명이 아니라 동작과 수치로
+- **왜 바꿨나**: 진단이 자명하지 않을 때만
+- **확인한 근거**: 행 수, 테스트 결과, 재실행 결과
 
 diff 를 읽으면 아는 것(파일 목록, 함수명 나열)은 적지 않는다.
 
@@ -63,12 +63,12 @@ feature/gold 병합 - 골드 DAG 자산 연쇄
 
 ## 강제 장치
 
-agent-hub 플러그인의 `hooks/git-message-style.py` 가 `PreToolUse` 에서 `git` 의 commit·merge·tag·revert 와
-`gh pr` 의 create·edit 을 검사하고 위반 시 실행을 막는다. 막히면 문구를 고쳐 다시 실행한다.
+lanekeeper 플러그인의 `hooks/git-message-style.py` 가 `PreToolUse` 에서 `git` 의 commit, merge, tag, revert 와
+`gh pr` 의 create, edit 을 검사하고 위반 시 실행을 막는다. 막히면 문구를 고쳐 다시 실행한다.
 일시 해제는 환경변수 `CLAUDE_GIT_STYLE=off`.
 
 한 Bash 호출에 여러 git 명령이 있어도 **명령마다 따로** 검사한다. 회귀 테스트는
-플러그인 저장소 `tests/` 에 둘 있다 — 훅을 고치면 둘 다 돌린다.
+플러그인 저장소 `tests/` 에 둘 있다. 훅을 고치면 둘 다 돌린다.
 
 ```bash
 python3 tests/test_style_basic.py   # 기본 규칙 36건
@@ -78,5 +78,5 @@ python3 tests/test_style_multi.py   # 한 호출에 여러 명령 7건
 ## 도구 쪽 함정
 
 - **`git merge -F -` 는 stdin 을 읽지 못한다.** `could not read file '-'` 로 죽는다.
-  `git commit` 은 되지만 merge 는 안 된다 — 머지 메시지가 길면 파일에 쓰고 `-F <파일>` 로 준다
-- `-m` 에 줄바꿈을 넣는 것은 commit·merge 모두 된다. 짧은 메시지에는 그게 편하다
+  `git commit` 은 되지만 merge 는 안 된다. 머지 메시지가 길면 파일에 쓰고 `-F <파일>` 로 준다
+- `-m` 에 줄바꿈을 넣는 것은 commit, merge 모두 된다. 짧은 메시지에는 그게 편하다

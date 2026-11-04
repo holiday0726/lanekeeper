@@ -15,7 +15,7 @@
 | `decisions.json` | 사용자 결정 목록 | 허브만 |
 | `dev-occupancy.json` | 공유 dev 환경을 지금 누가 쓰는지와 예정된 재기동 | 허브만 |
 
-- 이 폴더에서 세션을 열거나 이어 열면 agent-hub 플러그인의 SessionStart 훅이 대시보드(기본 http://127.0.0.1:4990)를 확인해 꺼져 있으면 띄운다. 플러그인 설정 `orca` 가 켜져 있고 `orca` 명령이 있으면 Orca 브라우저 탭으로도 연다.
+- 이 폴더에서 세션을 열거나 이어 열면 lanekeeper 플러그인의 SessionStart 훅이 대시보드(기본 http://127.0.0.1:4990)를 확인해 꺼져 있으면 띄운다. 플러그인 설정 `orca` 가 켜져 있고 `orca` 명령이 있으면 Orca 브라우저 탭으로도 연다.
 - 대시보드는 위 표의 `agents.json`, `decisions.json`, `STATUS.md`, `dev-occupancy.json` 을 읽기만 한다.
 - 이 폴더의 파일은 허브만 쓴다. 작업 위치가 이 폴더 밖인 세션의 Edit/Write 는 플러그인 훅이 막는다. Bash 로 쓰는 것(`sed -i`, `>`)은 막지 못하니 워커는 바꿀 내용을 허브에 보고한다.
 - 이력을 git 으로 남기지 않는다면 COORDINATION.md 변경 로그와 STATUS.md 측정 시각이 이력이다.
