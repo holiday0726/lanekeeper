@@ -11,7 +11,7 @@ Claude Code 세션 하나를 허브로 두고, 허브가 다른 세션들에 일
 
 | 구성 | 위치 | 하는 일 |
 |---|---|---|
-| 허브 규칙 틀 | `templates/hub/` | 허브의 역할(`CLAUDE.md`), 세션 사이 약속(`COORDINATION.md`), 현황판(`STATUS.md`)과 빈 데이터 파일 셋 |
+| 허브 규칙 틀 | `templates/hub/` | 허브의 역할과 스킬 쓰는 때(`CLAUDE.md`), 세션 사이 약속과 보고 형식(`COORDINATION.md`), 현황판(`STATUS.md`)과 빈 데이터 파일 셋 |
 | 대시보드 | `dashboard/` | 떠 있는 세션, 사용자 결정, 현황, 세션 사이 메시지를 보여 주는 읽기 전용 웹 화면. Python 표준 라이브러리만 씁니다 |
 | 훅 | `hooks/` | 허브 폴더에서 세션을 열면 대시보드를 띄우고, 다른 세션이 허브 폴더를 고치지 못하게 막고, git 커밋 문구를 검사합니다 |
 | 스킬 | `skills/` | 글을 사람이 쓴 것처럼 다듬는 `humanizer`, 커밋 문구 규칙 `git-message` |
@@ -35,6 +35,7 @@ cd ~
 git clone https://github.com/holiday0726/claude-hub-plugin.git
 claude plugin marketplace add ~/claude-hub-plugin
 claude plugin install agent-hub@agent-hub --config python=python3 --config hub_dir="$HOME/hub"
+claude plugin install addy-skills --marketplace holiday0726/Addy-skills
 
 mkdir -p ~/hub && cp ~/claude-hub-plugin/templates/hub/* ~/hub/
 cd ~/hub && claude
@@ -75,6 +76,25 @@ git clone https://github.com/holiday0726/claude-hub-plugin.git ~/claude-hub-plug
 claude plugin marketplace add ~/claude-hub-plugin
 claude plugin install agent-hub@agent-hub --config python=python3 --config hub_dir="$HOME/hub"
 ```
+
+### 함께 설치할 플러그인
+
+허브 규칙 틀의 `CLAUDE.md` "스킬 쓰는 때" 절은 [Addy-skills](https://github.com/holiday0726/Addy-skills) 플러그인의 스킬을 부릅니다.
+배정과 보고를 감독하는 스킬 일곱 개(`addy-skills:agent-oversight` 와 그 아래 스킬)입니다.
+`STATUS.md` 의 네 원칙과 `COORDINATION.md` 의 보고 형식도 이 스킬을 따릅니다.
+agent-hub 와 함께 설치합니다.
+
+```sh
+claude plugin install addy-skills --marketplace holiday0726/Addy-skills
+```
+
+Claude Code 세션 안에서는 이렇게 입력합니다.
+
+```
+/plugin install addy-skills --marketplace holiday0726/Addy-skills
+```
+
+`claude plugin details addy-skills@addy-skills` 에 스킬 일곱 개가 보이면 설치된 것입니다.
 
 ### 설치 확인과 갱신
 
