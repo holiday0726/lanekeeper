@@ -66,10 +66,10 @@ CASES = [
 ]
 
 
-def run(cmd, tool="Bash"):
+def run(cmd, tool="Bash", check=("true",)):
     payload = json.dumps({"tool_name": tool, "tool_input": {"command": cmd}}, ensure_ascii=False)
     out = subprocess.run(
-        [sys.executable, HOOK], input=payload, capture_output=True, encoding="utf-8", env=ENV
+        [sys.executable, HOOK, *check], input=payload, capture_output=True, encoding="utf-8", env=ENV
     ).stdout.strip()
     return ("DENY", out) if out else ("ALLOW", "")
 
@@ -90,5 +90,16 @@ for name, want, cmd in [("PowerShell 위반", "DENY", 'git commit -m "파서를 
     got = run(cmd, "PowerShell")[0]
     print("%s  %s" % ("PASS" if got == want else "FAIL", name))
     fail += got != want
-print("\n%d/%d" % (len(CASES) + 2 - fail, len(CASES) + 2))
+# 설정 git_message_check: 기본(인자 없음, 비었음, false, 치환 안 된 값)은 꺼짐, true 면 켜짐
+BAD = 'git commit -m "파서를 복구했습니다"'
+TOGGLE = [("설정 없음은 통과", "ALLOW", ()), ("빈 값은 통과", "ALLOW", ("",)),
+          ("false 는 통과", "ALLOW", ("false",)),
+          ("치환 안 된 값은 통과", "ALLOW", ("${user_config.git_message_check}",)),
+          ("true 는 검사", "DENY", ("true",))]
+for name, want, check in TOGGLE:
+    got = run(BAD, check=check)[0]
+    print("%s  %s" % ("PASS" if got == want else "FAIL", name))
+    fail += got != want
+total = len(CASES) + 2 + len(TOGGLE)
+print("\n%d/%d" % (total - fail, total))
 sys.exit(1 if fail else 0)

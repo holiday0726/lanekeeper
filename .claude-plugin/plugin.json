@@ -34,6 +34,12 @@
       "title": "Orca 탭 열기",
       "description": "허브 세션이 열릴 때 orca 명령이 있으면 대시보드를 Orca 브라우저 탭으로 엽니다. 설정하지 않으면 켜짐입니다.",
       "default": true
+    },
+    "git_message_check": {
+      "type": "boolean",
+      "title": "git 문구 검사",
+      "description": "켜면 git commit, merge, tag, revert 와 gh pr create, edit 의 문구를 개조식 규칙으로 검사하고 어기면 막습니다. 설정하지 않으면 꺼짐입니다.",
+      "default": false
     }
   }
 }

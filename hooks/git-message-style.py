@@ -7,6 +7,7 @@
 - 본문: 개조식(불릿), 서술형 종결어미 금지
 - 제목과 본문 사이 빈 줄 1개
 
+켜기: 플러그인 설정 git_message_check=true. hooks.json 이 첫 인자로 넘긴다. 기본은 꺼짐이라 바로 통과한다.
 해제: CLAUDE_GIT_STYLE=off
 """
 import json
@@ -189,6 +190,9 @@ RULES = """문구 규칙
 
 
 def main():
+    # 값이 비었거나 치환되지 않은 채로 와도 꺼짐으로 본다
+    if (sys.argv[1:2] or [""])[0].strip().lower() not in ("true", "1", "yes", "on"):
+        return 0
     if os.environ.get("CLAUDE_GIT_STYLE", "").lower() == "off":
         return 0
     for s in (sys.stdin, sys.stdout, sys.stderr):

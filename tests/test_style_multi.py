@@ -37,7 +37,7 @@ CASES = [
 fail = 0
 for name, want, cmd in CASES:
     payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": cmd}}, ensure_ascii=False)
-    out = subprocess.run([sys.executable, HOOK], input=payload,
+    out = subprocess.run([sys.executable, HOOK, "true"], input=payload,
                          capture_output=True, encoding="utf-8", env=ENV).stdout.strip()
     got = "DENY" if out else "ALLOW"
     if got == want:

@@ -65,13 +65,14 @@ feature/gold 병합 - 골드 DAG 자산 연쇄
 
 lanekeeper 플러그인의 `hooks/git-message-style.py` 가 `PreToolUse` 에서 `git` 의 commit, merge, tag, revert 와
 `gh pr` 의 create, edit 을 검사하고 위반 시 실행을 막는다. 막히면 문구를 고쳐 다시 실행한다.
-일시 해제는 환경변수 `CLAUDE_GIT_STYLE=off`.
+이 훅은 기본으로 꺼져 있다. 플러그인 설정 `git_message_check` 를 `true` 로 넣어야 켜진다.
+켠 뒤 일시 해제는 환경변수 `CLAUDE_GIT_STYLE=off`.
 
 한 Bash 호출에 여러 git 명령이 있어도 **명령마다 따로** 검사한다. 회귀 테스트는
 플러그인 저장소 `tests/` 에 둘 있다. 훅을 고치면 둘 다 돌린다.
 
 ```bash
-python3 tests/test_style_basic.py   # 기본 규칙 36건
+python3 tests/test_style_basic.py   # 기본 규칙과 켜기 설정 43건
 python3 tests/test_style_multi.py   # 한 호출에 여러 명령 7건
 ```
 
