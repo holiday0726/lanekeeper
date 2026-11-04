@@ -36,7 +36,8 @@ Windows 의 `python` 이 Microsoft Store 설치 안내만 띄우고 끝나는 �
 
 설정값 `python` 은 이렇게 정한다.
 
-- Windows: 출력의 둘째 칸(`sys.executable`)에서 역슬래시를 `/` 로 바꾼 절대 경로. 훅은 셸을 거치지 않고 이 값을 그대로 실행한다.
+- Windows: 출력의 둘째 칸(`sys.executable`)에서 역슬래시를 `/` 로 바꾼 절대 경로.
+  훅은 셸을 거치지 않고 이 값을 그대로 실행한다.
 - Linux, macOS: `python3`
 
 아래에서 `<PY>` 는 이 단계에서 성공한 명령(`py -3`, `python`, `python3`)을 뜻한다.
@@ -57,14 +58,17 @@ Windows 의 `python` 이 Microsoft Store 설치 안내만 띄우고 끝나는 �
 스크립트가 하는 일은 이렇다.
 다시 돌려도 결과가 같다.
 
-- 허브 폴더를 만들고 `templates/hub/*` 와 `examples/hub.settings.json`(`.claude/settings.json` 으로), `examples/supervisor.settings.json` 을 복사한다. 있는 파일은 덮지 않는다.
-- 사용자 설정 `settings.json` 에 `examples/user.settings.json` 의 키 중 없는 것만 더한다. 있는 값은 그대로 두고, 쓰기 전에 `settings.json.bak-<시각>` 으로 백업한다.
+- 허브 폴더를 만들고 `templates/hub/*` 와 `examples/hub.settings.json`(`.claude/settings.json` 으로), `examples/supervisor.settings.json` 을 복사한다.
+  있는 파일은 덮지 않는다.
+- 사용자 설정 `settings.json` 에 `examples/user.settings.json` 의 키 중 없는 것만 더한다.
+  있는 값은 그대로 두고, 쓰기 전에 `settings.json.bak-<시각>` 으로 백업한다.
 - `agents.json` 의 `resident.hub.cwd` 가 비어 있으면 허브 폴더 경로를 넣는다.
 
 출력의 각 줄은 `created`, `exists`, `merged`, `kept`, `backup`, `filled` 로 시작한다.
 `kept` 줄은 기존 값을 그대로 둔 것이니 사용자에게 보여 주고, 예시 값으로 바꾸고 싶으면 직접 고치라고 알린다.
 마지막 줄은 JSON 이고, 그 `hub_dir` 를 다음 단계의 설정값으로 쓴다.
-사용자 설정이 JSON 으로 읽히지 않는다는 오류로 끝나면 아무것도 바뀌지 않았다. 그 파일을 사용자가 고친 뒤 다시 부르라고 알린다.
+사용자 설정이 JSON 으로 읽히지 않는다는 오류로 끝나면 아무것도 바뀌지 않았다.
+그 파일을 사용자가 고친 뒤 다시 부르라고 알린다.
 
 ## 4. 플러그인 설정값 넣기
 
@@ -79,6 +83,9 @@ claude plugin configure agent-hub@agent-hub --json
 
 값을 넣는다.
 JSON 의 값은 한 줄 문자열이어야 하고, 경로에 `"` 가 있으면 `\"` 로 바꾼다.
+`hub_dir` 는 3단계 마지막 줄의 값을 `\uXXXX` 이스케이프를 풀지 않고 그대로 넣는다.
+그래야 PowerShell 5.1 처럼 파이프를 ASCII 로 보내는 셸에서도 한글 경로가 깨지지 않는다.
+`python` 값에 ASCII 밖 글자가 있으면 같은 꼴(`\uXXXX`)로 바꿔 넣는다.
 
 Bash:
 
@@ -93,7 +100,8 @@ PowerShell:
 ```
 
 `Configuration saved` 가 보이면 된 것이다.
-`dashboard_port` 와 `orca` 는 넣지 않는다. 비워 두면 기본값(4990, 켬)을 쓴다.
+`dashboard_port` 와 `orca` 는 넣지 않는다.
+비워 두면 기본값(4990, 켬)을 쓴다.
 
 ## 5. addy-skills 설치
 
@@ -113,9 +121,12 @@ claude plugin install addy-skills --marketplace holiday0726/Addy-skills
 
 사용자에게 아래를 알린다.
 
-1. 설정값은 Claude Code 를 다시 열어야 적용된다. 지금 세션을 닫는다.
-2. 허브 폴더에서 세션을 연다(`cd <허브 폴더>` 뒤 `claude`). `대시보드 http://127.0.0.1:4990 떠 있음` 이 보이면 브라우저로 연다.
-3. 허브 세션 안에서 `/rename hub` 를 입력한다. 대시보드는 `agents.json` 의 `hub` 세션을 허브로 본다.
+1. 설정값은 Claude Code 를 다시 열어야 적용된다.
+   지금 세션을 닫는다.
+2. 허브 폴더에서 세션을 연다(`cd <허브 폴더>` 뒤 `claude`).
+   `대시보드 http://127.0.0.1:4990 떠 있음` 이 보이면 브라우저로 연다.
+3. 허브 세션 안에서 `/rename hub` 를 입력한다.
+   대시보드는 `agents.json` 의 `hub` 세션을 허브로 본다.
 4. 손으로 채울 자리: `.claude/settings.json` 의 `<레인 저장소>` 자리, `supervisor.settings.json` 의 `autoMode.allow`, `CLAUDE.md` 와 `COORDINATION.md` 의 `<...>` 자리.
 
 3단계에서 `kept` 가 나온 키와 4단계에서 바꾸지 않은 값이 있으면 여기서 다시 짚는다.

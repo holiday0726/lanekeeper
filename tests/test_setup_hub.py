@@ -145,5 +145,15 @@ _, err = run(os.path.join(tmp, 'home'), os.path.join(tmp, 'hub'), ok=False)
 assert not os.path.exists(os.path.join(tmp, 'home')), '멈출 때 사용자 설정도 쓰지 않음'
 case('허브 경로가 파일')
 
+# 8. Windows 에서 /c/Users/... 꼴 허브 경로는 C:/Users/... 로 푼다 (Windows 에서만)
+if os.name == 'nt':
+    tmp = tempfile.mkdtemp()
+    hub = os.path.join(tmp, 'hub')
+    bash_form = '/' + hub[0].lower() + hub[2:].replace('\\', '/')
+    out, _ = run(os.path.join(tmp, 'home'), bash_form)
+    assert json.loads(out.splitlines()[-1])['hub_dir'].casefold() == hub.replace('\\', '/').casefold(), out
+    assert os.path.isfile(os.path.join(hub, 'agents.json'))
+    case('/c/ 꼴 경로')
+
 shutil.rmtree(tmp, ignore_errors=True)
 print('모두 통과')

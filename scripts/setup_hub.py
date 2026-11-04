@@ -19,7 +19,8 @@ if sys.version_info < (3, 8):
     sys.exit('Python 3.8 이상이 필요합니다: ' + sys.version.split()[0])
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-NT = os.name == 'nt'
+sys.path.insert(0, os.path.join(REPO, 'hooks'))
+from hubpath import NT, native  # noqa: E402  훅과 같은 규칙으로 ~ 와 /c/x 꼴을 푼다
 
 
 def slash(p):
@@ -102,7 +103,7 @@ def main(argv=None):
     ap.add_argument('--config-dir', help='Claude 설정 폴더. 기본은 CLAUDE_CONFIG_DIR 또는 ~/.claude')
     a = ap.parse_args(argv)
     sys.stdout.reconfigure(errors='backslashreplace')  # Windows cp949 콘솔에서 못 찍는 글자로 죽지 않게
-    hub = os.path.abspath(os.path.expanduser(a.hub))
+    hub = os.path.abspath(native(a.hub))
     config_dir = os.path.abspath(os.path.expanduser(
         a.config_dir or os.environ.get('CLAUDE_CONFIG_DIR') or os.path.join('~', '.claude')))
     if os.path.exists(hub) and not os.path.isdir(hub):

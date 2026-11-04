@@ -50,10 +50,16 @@ claude plugin install agent-hub --marketplace holiday0726/claude-hub-plugin
 스킬은 이 순서로 진행합니다.
 다시 불러도 결과가 같습니다.
 
-1. Python 3.8 이상을 찾습니다. Windows 는 `py -3` 을 먼저 보고, 없으면 `python` 을 봅니다. 훅이 셸 없이 실행하므로 Windows 에서는 `python.exe` 절대 경로를 설정값으로 씁니다.
-2. 허브 폴더를 묻습니다. 기본값은 홈 폴더 아래 `hub` 입니다. `/agent-hub:setup C:/Users/<나>/hub` 처럼 바로 줘도 됩니다.
-3. 허브 폴더를 만들고 규칙 틀과 설정 예시를 복사합니다. 이미 있는 파일은 덮지 않습니다.
-4. 사용자 설정(`~/.claude/settings.json`)에 `examples/user.settings.json` 의 키 중 없는 것만 더합니다. 있는 값은 그대로 두고, 쓰기 전에 `settings.json.bak-<시각>` 으로 백업합니다.
+1. Python 3.8 이상을 찾습니다.
+   Windows 는 `py -3` 을 먼저 보고, 없으면 `python` 을 봅니다.
+   훅이 셸 없이 실행하므로 Windows 에서는 `python.exe` 절대 경로를 설정값으로 씁니다.
+2. 허브 폴더를 묻습니다.
+   기본값은 홈 폴더 아래 `hub` 입니다.
+   `/agent-hub:setup C:/Users/<나>/hub` 처럼 바로 줘도 됩니다.
+3. 허브 폴더를 만들고 규칙 틀과 설정 예시를 복사합니다.
+   이미 있는 파일은 덮지 않습니다.
+4. 사용자 설정(`~/.claude/settings.json`)에 `examples/user.settings.json` 의 키 중 없는 것만 더합니다.
+   있는 값은 그대로 두고, 쓰기 전에 `settings.json.bak-<시각>` 으로 백업합니다.
 5. `agents.json` 에 허브 폴더 경로를 넣고, 플러그인 설정값 `python` 과 `hub_dir` 를 넣습니다.
 6. [Addy-skills](https://github.com/holiday0726/Addy-skills) 플러그인이 없으면 설치합니다.
 
