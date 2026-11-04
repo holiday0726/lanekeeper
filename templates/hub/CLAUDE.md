@@ -30,8 +30,9 @@
 
 ## 스킬 쓰는 때
 
+addy-skills 플러그인이 설치돼 있을 때만 이 절을 따른다. 설치돼 있지 않으면 건너뛴다.
 `addy-skills:agent-oversight` 와 그 아래 스킬을 이렇게 쓴다.
-스킬 원본은 https://github.com/holiday0726/Addy-skills 이고, 플러그인 `addy-skills@addy-skills` 로 설치한다(README "함께 설치할 플러그인").
+스킬 원본은 https://github.com/holiday0726/Addy-skills 이고, 플러그인 `addy-skills@addy-skills` 로 설치한다(README.ko.md "함께 쓰는 플러그인 (선택)").
 이름 앞에 `addy-skills:` 가 붙는다.
 플러그인의 SessionStart 훅이 일반 안내 표를 넣지만, 허브는 아래 표를 따른다.
 

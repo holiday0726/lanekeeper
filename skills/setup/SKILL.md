@@ -1,6 +1,6 @@
 ---
 name: setup
-description: lanekeeper 를 설치한 뒤 한 번 돌리는 설치 마무리. Python 경로를 찾고, 허브 폴더를 만들어 규칙 틀과 설정 예시를 복사하고, 사용자 설정에 필요한 키를 합치고, 플러그인 설정값 python 과 hub_dir 를 넣고, addy-skills 를 설치한다.
+description: lanekeeper 를 설치한 뒤 한 번 돌리는 설치 마무리. Python 경로를 찾고, 허브 폴더를 만들어 규칙 틀과 설정 예시를 복사하고, 사용자 설정에 필요한 키를 합치고, 플러그인 설정값 python 과 hub_dir 를 넣고, 사용자가 원하면 addy-skills 를 설치한다.
 argument-hint: "[허브 폴더 경로]"
 disable-model-invocation: true
 ---
@@ -101,18 +101,19 @@ PowerShell:
 ```
 
 `Configuration saved` 가 보이면 된 것이다.
-`dashboard_port` 와 `orca` 는 넣지 않는다.
-비워 두면 기본값(4990, 켬)을 쓴다.
+`dashboard_port`, `orca`, `git_message_check` 는 넣지 않는다.
+비워 두면 기본값(4990, 켬, 꺼짐)을 쓴다.
 
-## 5. addy-skills 설치
+## 5. addy-skills 설치(선택)
 
 ```
 claude plugin list --json
 ```
 
 `addy-skills@` 로 시작하는 항목이 있으면 건너뛴다.
-없으면 설치한다.
-허브 규칙 틀의 `CLAUDE.md` 가 이 플러그인의 스킬을 부른다.
+없으면 설치할지 사용자에게 묻고, 기본은 설치하지 않는다.
+허브 규칙 틀의 `CLAUDE.md` "스킬 쓰는 때" 절이 이 플러그인의 스킬을 부르는데, 설치하지 않으면 허브가 그 절을 건너뛴다고 함께 알린다.
+사용자가 설치하겠다고 답한 때에만 아래를 돌린다.
 
 ```
 claude plugin install addy-skills --marketplace holiday0726/Addy-skills
