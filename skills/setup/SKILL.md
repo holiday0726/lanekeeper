@@ -60,7 +60,8 @@ Windows 의 `python` 이 Microsoft Store 설치 안내만 띄우고 끝나는 �
 
 - 허브 폴더를 만들고 `templates/hub/*` 와 `examples/hub.settings.json`(`.claude/settings.json` 으로), `examples/supervisor.settings.json` 을 복사한다.
   있는 파일은 덮지 않는다.
-- 사용자 설정 `settings.json` 에 `examples/user.settings.json` 의 키 중 없는 것만 더한다.
+- 사용자 설정 `settings.json` 에 `examples/user.settings.json` 의 키(`crossSessionInbound`) 가 없으면 더한다.
+  `model` 같은 다른 설정은 건드리지 않는다.
   있는 값은 그대로 두고, 쓰기 전에 `settings.json.bak-<시각>` 으로 백업한다.
 - `agents.json` 의 `resident.hub.cwd` 가 비어 있으면 허브 폴더 경로를 넣는다.
 

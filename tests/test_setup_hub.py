@@ -97,6 +97,20 @@ run(home, hub)
 assert snapshot(tmp) == before, '합친 뒤 다시 돌리면 백업도 새로 만들지 않음'
 case('사용자 설정 합치기와 백업')
 
+# 3b. model 이 없는 사용자 설정에 model 을 넣지 않는다 (기본 모델을 바꾸지 않음)
+tmp = tempfile.mkdtemp()
+home, hub = os.path.join(tmp, 'home'), os.path.join(tmp, 'hub')
+user = os.path.join(home, '.claude', 'settings.json')
+write(user, '{"theme": "dark"}\n')
+run(home, hub)
+assert load(user) == {'theme': 'dark', 'crossSessionInbound': 'accept'}, load(user)
+shutil.rmtree(tmp, ignore_errors=True)
+tmp = tempfile.mkdtemp()
+os.makedirs(os.path.join(tmp, 'home'))
+run(os.path.join(tmp, 'home'), os.path.join(tmp, 'hub'))
+assert 'model' not in load(os.path.join(tmp, 'home', '.claude', 'settings.json')), '새 설정 파일에도 model 없음'
+case('model 은 넣지 않음')
+
 # 4. 허브 폴더에 이미 있는 파일과 채워진 agents.json 은 덮지 않는다
 tmp = tempfile.mkdtemp()
 home, hub = os.path.join(tmp, 'home'), os.path.join(tmp, 'hub')

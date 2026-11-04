@@ -58,7 +58,8 @@ claude plugin install agent-hub --marketplace holiday0726/claude-hub-plugin
    `/agent-hub:setup C:/Users/<나>/hub` 처럼 바로 줘도 됩니다.
 3. 허브 폴더를 만들고 규칙 틀과 설정 예시를 복사합니다.
    이미 있는 파일은 덮지 않습니다.
-4. 사용자 설정(`~/.claude/settings.json`)에 `examples/user.settings.json` 의 키 중 없는 것만 더합니다.
+4. 사용자 설정(`~/.claude/settings.json`)에 `crossSessionInbound: "accept"` 가 없으면 더합니다(`examples/user.settings.json`).
+   모델 같은 다른 설정은 건드리지 않습니다.
    있는 값은 그대로 두고, 쓰기 전에 `settings.json.bak-<시각>` 으로 백업합니다.
 5. `agents.json` 에 허브 폴더 경로를 넣고, 플러그인 설정값 `python` 과 `hub_dir` 를 넣습니다.
 6. [Addy-skills](https://github.com/holiday0726/Addy-skills) 플러그인이 없으면 설치합니다.
@@ -187,7 +188,7 @@ Copy-Item "$src\examples\supervisor.settings.json" "$hub\supervisor.settings.jso
 
 1. `.claude/settings.json`: 허브 세션의 모델과 권한입니다. `deny` 의 `<레인 저장소>` 자리에 허브가 직접 고치면 안 되는 저장소를, `additionalDirectories` 에 그 저장소들의 상위 폴더를 넣습니다.
 2. `supervisor.settings.json`: 허브가 슈퍼바이저 세션을 띄울 때 `--settings` 로 붙이는 파일입니다. 슈퍼바이저에게 허락할 일을 `autoMode.allow` 에 문장으로 적습니다.
-3. 사용자 설정(`~/.claude/settings.json`, Windows 는 `%USERPROFILE%\.claude\settings.json`)에 `examples/user.settings.json` 의 두 키를 손으로 합칩니다. `crossSessionInbound: "accept"` 가 있어야 세션 사이 메시지가 승인 대기 없이 바로 전달됩니다.
+3. 사용자 설정(`~/.claude/settings.json`, Windows 는 `%USERPROFILE%\.claude\settings.json`)에 `examples/user.settings.json` 의 키를 손으로 합칩니다. `crossSessionInbound: "accept"` 가 있어야 세션 사이 메시지가 승인 대기 없이 바로 전달됩니다.
 4. `agents.json` 의 `resident.hub.cwd` 에 허브 폴더 경로를 넣고, 허브 세션 안에서 `/rename hub` 로 이름을 맞춥니다. 대시보드는 이 파일에서 `lane` 이 `HUB` 인 세션을 허브로 봅니다.
 5. `CLAUDE.md` 와 `COORDINATION.md` 의 `<...>` 자리에 레인, 저장소, 인터페이스를 적습니다.
 
