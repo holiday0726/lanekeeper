@@ -9,7 +9,7 @@
     {
       "name": "agent-hub",
       "source": "./",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "description": "에이전트 대시보드, 허브 폴더 쓰기 보호와 git 문구 검사 훅, humanizer와 git-message 스킬",
       "license": "MIT"
     }

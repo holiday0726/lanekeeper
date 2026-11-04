@@ -14,7 +14,8 @@ Claude Code 세션 하나를 허브로 두고, 허브가 다른 세션들에 일
 | 허브 규칙 틀 | `templates/hub/` | 허브의 역할과 스킬 쓰는 때(`CLAUDE.md`), 세션 사이 약속과 보고 형식(`COORDINATION.md`), 현황판(`STATUS.md`)과 빈 데이터 파일 셋 |
 | 대시보드 | `dashboard/` | 떠 있는 세션, 사용자 결정, 현황, 세션 사이 메시지를 보여 주는 읽기 전용 웹 화면. Python 표준 라이브러리만 씁니다 |
 | 훅 | `hooks/` | 허브 폴더에서 세션을 열면 대시보드를 띄우고, 다른 세션이 허브 폴더를 고치지 못하게 막고, git 커밋 문구를 검사합니다 |
-| 스킬 | `skills/` | 글을 사람이 쓴 것처럼 다듬는 `humanizer`, 커밋 문구 규칙 `git-message` |
+| 스킬 | `skills/` | 설치 마무리 `setup`, 글을 사람이 쓴 것처럼 다듬는 `humanizer`, 커밋 문구 규칙 `git-message` |
+| 설치 스크립트 | `scripts/` | `setup` 스킬이 부르는 `setup_hub.py`. 허브 폴더 복사와 설정 합치기를 맡습니다 |
 | 설정 예시 | `examples/` | 허브와 슈퍼바이저 세션의 권한, 기본 모델 같은 설정 견본 |
 
 ## 배정에서 보고까지
@@ -28,22 +29,51 @@ Claude Code 세션 하나를 허브로 두고, 허브가 다른 세션들에 일
 
 ## 빠른 시작
 
-Linux 나 macOS 에서 홈 폴더에 받고, `~/hub` 를 허브 폴더로 쓰는 예입니다. Windows 는 아래 [설치](#설치) 절을 보세요.
+Claude Code 와 Python 3.8 이상이 있으면 됩니다.
+Windows, Linux, macOS 모두 같은 방법입니다.
+
+터미널(Windows 는 PowerShell)에서 GitHub 마켓플레이스로 플러그인을 설치합니다.
 
 ```sh
-cd ~
-git clone https://github.com/holiday0726/claude-hub-plugin.git
-claude plugin marketplace add ~/claude-hub-plugin
-claude plugin install agent-hub@agent-hub --config python=python3 --config hub_dir="$HOME/hub"
-claude plugin install addy-skills --marketplace holiday0726/Addy-skills
+claude plugin install agent-hub --marketplace holiday0726/claude-hub-plugin
+```
 
-mkdir -p ~/hub && cp ~/claude-hub-plugin/templates/hub/* ~/hub/
-cd ~/hub && claude
+설치가 끝나면 설정값 `python` 과 `hub_dir` 가 비어 있다는 안내가 나옵니다.
+다음 단계에서 채웁니다.
+
+아무 폴더에서 `claude` 를 열고 설치 스킬을 부릅니다.
+
+```
+/agent-hub:setup
+```
+
+스킬은 이 순서로 진행합니다.
+다시 불러도 결과가 같습니다.
+
+1. Python 3.8 이상을 찾습니다. Windows 는 `py -3` 을 먼저 보고, 없으면 `python` 을 봅니다. 훅이 셸 없이 실행하므로 Windows 에서는 `python.exe` 절대 경로를 설정값으로 씁니다.
+2. 허브 폴더를 묻습니다. 기본값은 홈 폴더 아래 `hub` 입니다. `/agent-hub:setup C:/Users/<나>/hub` 처럼 바로 줘도 됩니다.
+3. 허브 폴더를 만들고 규칙 틀과 설정 예시를 복사합니다. 이미 있는 파일은 덮지 않습니다.
+4. 사용자 설정(`~/.claude/settings.json`)에 `examples/user.settings.json` 의 키 중 없는 것만 더합니다. 있는 값은 그대로 두고, 쓰기 전에 `settings.json.bak-<시각>` 으로 백업합니다.
+5. `agents.json` 에 허브 폴더 경로를 넣고, 플러그인 설정값 `python` 과 `hub_dir` 를 넣습니다.
+6. [Addy-skills](https://github.com/holiday0726/Addy-skills) 플러그인이 없으면 설치합니다.
+
+스킬이 끝나면 세션을 닫고 허브 폴더에서 새로 엽니다.
+설정값은 Claude Code 를 다시 열어야 적용됩니다.
+
+```sh
+cd ~/hub
+claude
 ```
 
 세션이 열리면서 `대시보드 http://127.0.0.1:4990 떠 있음` 이 보이면 브라우저로 그 주소를 엽니다.
+허브 세션 안에서 `/rename hub` 를 입력합니다.
+그다음 [허브 폴더 만들기](#허브-폴더-만들기) 의 1, 2, 5 번대로 `<...>` 자리를 채웁니다.
 
-## 설치
+새 판은 `claude plugin marketplace update agent-hub` 와 `claude plugin update agent-hub@agent-hub` 로 받고, 세션을 다시 엽니다.
+
+## 손으로 설치하기
+
+설치 스킬을 쓰지 않거나, 저장소를 받아 고쳐 쓰려면 이렇게 합니다.
 
 Claude Code, git, Python 3.8 이상이 필요합니다. 저장소 폴더가 그대로 로컬 마켓플레이스라서 받은 폴더를 마켓플레이스로 붙이고 그 안의 `agent-hub` 플러그인을 설치합니다.
 
@@ -99,7 +129,7 @@ Claude Code 세션 안에서는 이렇게 입력합니다.
 ### 설치 확인과 갱신
 
 ```sh
-claude plugin details agent-hub@agent-hub    # Skills (2), Hooks (2) 가 보이면 설치된 것
+claude plugin details agent-hub@agent-hub    # Skills (3), Hooks (2) 가 보이면 설치된 것
 ```
 
 플러그인은 받은 폴더를 그대로 읽습니다. 설치한 뒤에는 그 폴더를 옮기거나 지우지 마세요. 새 판을 받을 때는 그 폴더에서 `git pull` 한 뒤 세션을 다시 열거나 세션 안에서 `/reload-plugins` 를 입력합니다.
@@ -126,6 +156,7 @@ git archive --format=zip -o ../agent-hub.zip main    # 받는 쪽: 압축을 풀
 ## 허브 폴더 만들기
 
 허브 폴더는 허브 세션을 여는 폴더이고, 설정값 `hub_dir` 와 같은 경로여야 합니다. 규칙 틀과 설정 예시를 복사합니다.
+`/agent-hub:setup` 을 썼다면 아래 복사와 3, 4 번은 이미 되어 있습니다.
 
 Linux, macOS:
 
@@ -203,6 +234,7 @@ $env:HUB_DIR = "C:\Users\<나>\hub"; $env:PORT = "4990"; py -3 C:\Users\<나>\cl
 
 | 스킬 | 부르는 법 | 쓰임 |
 |---|---|---|
+| setup | `/agent-hub:setup [허브 폴더]` | 설치를 마무리합니다. 허브 폴더를 만들고 사용자 설정과 플러그인 설정값을 채웁니다. [빠른 시작](#빠른-시작) 참고 |
 | humanizer | `/agent-hub:humanizer` | AI 가 쓴 티가 나는 문장을 고칩니다. 허브의 `STATUS.md` 와 결정 문구를 다듬을 때 씁니다 |
 | git-message | `/agent-hub:git-message` | 커밋, 머지, PR 문구를 개조식으로 쓰는 규칙. git 문구 검사 훅이 막았을 때 같이 봅니다 |
 
@@ -214,9 +246,10 @@ dashboard/        server.py, index.html, test_server.py, vendor/
 docs/             README 그림(images/)과 그림 원본(diagrams/)
 examples/         hub.settings.json, supervisor.settings.json, user.settings.json
 hooks/            hooks.json, open_dashboard.py, hub_only_write.py, git-message-style.py, hubpath.py
-skills/           humanizer/, git-message/
+scripts/          setup_hub.py
+skills/           setup/, humanizer/, git-message/
 templates/hub/    CLAUDE.md, COORDINATION.md, STATUS.md, agents.json, decisions.json, dev-occupancy.json
-tests/            훅 시험
+tests/            훅과 설치 스크립트 시험
 ```
 
 ## 시험 돌리기
@@ -227,6 +260,7 @@ python3 tests/test_hub_only_write.py    # 허브 폴더 보호, Windows 경로 �
 python3 tests/test_style_basic.py       # git 문구 기본 규칙
 python3 tests/test_style_multi.py       # 한 명령에 git 명령이 여럿일 때
 python3 tests/test_open_dashboard.py    # 대시보드 열기 훅, 빈 포트에 서버를 띄웠다가 끕니다
+python3 tests/test_setup_hub.py         # 설치 스크립트, 임시 폴더와 가짜 HOME 으로만 돕니다
 claude plugin validate --strict .       # 매니페스트 검사
 ```
 
