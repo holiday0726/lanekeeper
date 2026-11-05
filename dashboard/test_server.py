@@ -18,7 +18,7 @@ lines = [
         'Another Claude session sent a message:\n<cross-session-message from="uds:x" from-name="hub">[배정] 할 일</cross-session-message>'}),
     rec(type='user', timestamp='t3', isMeta=True, message={'content': 'skill body'}),
     rec(type='attachment', timestamp='t4', attachment={'type': 'queued_command', 'origin': {'kind': 'peer'},
-        'prompt': '<cross-session-message from-name="WF1">보고</cross-session-message>'}),
+        'prompt': '<cross-session-message from-name="web">보고</cross-session-message>'}),
     rec(type='assistant', timestamp='t5', message={'content': [
         {'type': 'thinking', 'thinking': ''},
         {'type': 'text', 'text': '알겠습니다'},
@@ -33,7 +33,7 @@ r = server.read_transcript(f.name, -1)
 kinds = [e['k'] for e in r['events']]
 assert kinds == ['user', 'peer', 'peer', 'reply', 'tool', 'send', 'result'], kinds
 assert r['events'][1]['from'] == 'hub' and r['events'][1]['text'] == '[배정] 할 일'
-assert r['events'][2]['from'] == 'WF1'
+assert r['events'][2]['from'] == 'web'
 assert r['events'][4]['sum'] == 'List files' and r['events'][6]['err'] is True
 assert r['offset'] == len(''.join(lines).encode()), 'partial line must not be consumed'
 assert server.read_transcript(f.name, r['offset'])['events'] == []
@@ -41,11 +41,11 @@ os.unlink(f.name)
 
 # roster: resident / task / other, and a broken or missing file falls back to other
 with tempfile.NamedTemporaryFile('w', encoding='utf-8', newline='', suffix='.json', delete=False) as f:
-    json.dump({'_note': 'x', 'resident': {'hub': {'lane': 'HUB'}, 'WF1': {'lane': 'WF1'}, 'bad': 'str'},
+    json.dump({'_note': 'x', 'resident': {'hub': {'lane': 'HUB'}, 'web': {'lane': 'WEB'}, 'bad': 'str'},
                'task': {'task-ui': {'task': 'T-1', 'lane': '도구'}}}, f)
 ro = server.roster(f.name)
 assert ro['hub'] == {'group': 'resident', 'lane': 'HUB', 'task': '', 'order': 0}
-assert ro['WF1']['order'] == 1 and 'bad' not in ro
+assert ro['web']['order'] == 1 and 'bad' not in ro
 assert ro['task-ui']['group'] == 'task' and ro['task-ui']['task'] == 'T-1'
 assert ro.get('stranger', {'group': 'other'})['group'] == 'other'
 for broken in ('{"resident": ', '[1, 2]', '{"resident": [1]}', '{"task": {"x": null}}'):
@@ -72,14 +72,14 @@ assert got == [('busy', 't-busy'), ('busy', 'r-busy'), ('busy', 'o-busy'),
                ('done', 't-done'), ('done', 'r-done')], got
 
 # decisions: file items by status plus live blocked needs, each section in display order
-names = {'WF1': {'group': 'resident', 'lane': 'WF1', 'task': '', 'order': 0},
+names = {'web': {'group': 'resident', 'lane': 'WEB', 'task': '', 'order': 0},
          'task-x': {'group': 'task', 'lane': '도구', 'task': 'T-9', 'order': 0}}
 rows = [A('task-x', 'task', 5, state='blocked', needs='권한 승인?', sessionId='s1'),
-        A('WF1', 'resident', 9, state='blocked', needs='어느 쪽?', sessionId='s2'),
+        A('web', 'resident', 9, state='blocked', needs='어느 쪽?', sessionId='s2'),
         A('busy-one', 'other', 9, state='working', needs='옛 질문', sessionId='s3'),
         A('done-one', 'other', 9, state='done', needs='옛 질문', sessionId='s4'),
         A('quiet', 'other', 9, state='blocked', needs='', sessionId='s5')]
-items = [{'id': 'o1', 'status': 'open', 'title': 'a', 'source': 'WF1', 'raised': '2026-10-20 19:30', 'refs': 'one'},
+items = [{'id': 'o1', 'status': 'open', 'title': 'a', 'source': 'web', 'raised': '2026-10-20 19:30', 'refs': 'one'},
          {'id': 'o2', 'status': 'open', 'title': 'b', 'source': 'flow-env', 'raised': '2026-10-20 21:00'},
          {'id': 'x', 'status': '???', 'title': 'c', 'raised': '2026-10-20 18:00'},
          {'id': 'w1', 'status': 'waiting', 'until': '사용자가 다시 말할 때', 'raised': '2026-10-20 19:00'},
@@ -90,7 +90,7 @@ items = [{'id': 'o1', 'status': 'open', 'title': 'a', 'source': 'WF1', 'raised':
          {'id': 'd2', 'status': 'decided'},
          {'id': 'd3', 'status': 'decided', 'decided_at': '2026-10-20 21:30'}]
 m = server.merge_decisions(items, rows, names)
-assert [d.get('id') or d['source'] for d in m['now']] == ['WF1', 'task-x', 'o2', 'o1', 'x'], m['now']
+assert [d.get('id') or d['source'] for d in m['now']] == ['web', 'task-x', 'o2', 'o1', 'x'], m['now']
 assert m['now'][1]['live'] and m['now'][1]['task'] == 'T-9' and m['now'][1]['sid'] == 's1'
 assert [d['id'] for d in m['waiting']] == ['w3', 'w2', 'w4', 'w1']
 assert [d['id'] for d in m['decided']] == ['d3', 'd1', 'd2']
@@ -217,10 +217,10 @@ croll('a', [meta(U1), ev('task_started')], age=0)   # newest file, no token_coun
 assert U()['codex'] == {'state': 'missing'}
 # b written later (mtime) but its last token_count is older than c's
 croll('b', [meta(U2), tc('2026-10-26T01:00:00Z', 10), tc('2026-10-26T01:05:00Z', 20, rl=False)], age=10)
-croll('c', [meta(U3), tc('2026-10-26T01:06:00Z', 30, 'prolite') + '{"timestamp":"t","type":"event_msg","pay'], age=20)
+croll('c', [meta(U3), tc('2026-10-26T01:06:00Z', 30, 'plus') + '{"timestamp":"t","type":"event_msg","pay'], age=20)
 croll('d', [meta(U4), '{broken\n', tc('2026-10-26T01:07:00Z', 99)], age=90000)   # newer record, but mtime says the file is older: never read
 x = U()['codex']
-assert x == {'at': server.iso_ms('2026-10-26T01:06:00Z'), 'plan': 'prolite', 'state': 'ok', 'windows': [
+assert x == {'at': server.iso_ms('2026-10-26T01:06:00Z'), 'plan': 'plus', 'state': 'ok', 'windows': [
     {'key': 'primary', 'minutes': 10080, 'used': 30.0, 'resets': MS + 60000, 'reset': False}]}, x
 assert U(x['at'] + 31 * 60000)['codex']['state'] == 'stale'
 shutil.rmtree(tmp)
@@ -286,65 +286,65 @@ def tr(folder, sid, lines, age=0, tail=''):
     os.utime(path, (NOW - age, NOW - age))
     return path
 hub = tr('-hub', 'hubsid', [
-    rec(type='agent-name', agentName='SUP'),
-    send(T0, 's1', 'WF1', '[배정] T-1 할 일\n자세히', '할 일 배정'), result('s1', msg_id='m1'),
+    rec(type='agent-name', agentName='hub'),
+    send(T0, 's1', 'web', '[배정] T-1 할 일\n자세히', '할 일 배정'), result('s1', msg_id='m1'),
     send(T0 + 60, 's2', 'uds:/run/user/1/cc-socks/222.sock', '[알림] dev 재기동'), result('s2', msg_id='m2', as_text=True),
     send(T0 + 70, 's3', 'gone', '못 감'), result('s3', ok=False),                       # failed: not delivered
-    send(T0 + 80, 's4', 'WF1', '아직 결과 없음'),                                          # no result yet
+    send(T0 + 80, 's4', 'web', '아직 결과 없음'),                                          # no result yet
     send(T0 + 90, 's5', 'release [a1b2c3]', '옛 형식 메시지'), result('s5', msg_id='m5'),   # the receipt has no msg_id
     send(T0 + 95, 's10', 'worker', '서브에이전트에게'), result('s10'),                     # success without msg_id: a sub-agent
-    peer(T0 + 200, 'WF1', '[보고] T-1 끝', 'm3'),
+    peer(T0 + 200, 'web', '[보고] T-1 끝', 'm3'),
     peer(T0 + 300, 'task-old', '[보고] 닫힌 세션 보고', 'm4', queued=True),
     peer(T0 + 310, 'task-old', '[보고] 닫힌 세션 보고', 'm4'),                             # queued, then delivered: one message
     rec(type='queue-operation', operation='enqueue', timestamp=iso(T0 + 300), content='<cross-session-message from-name="x">echo</cross-session-message>'),
-    rec(type='user', timestamp=iso(T0 + 400), message={'content': '[Cross-session idle notice] "WF1" ... is idle now'}),
+    rec(type='user', timestamp=iso(T0 + 400), message={'content': '[Cross-session idle notice] "web" ... is idle now'}),
     rec(type='user', timestamp=iso(T0 + 410), origin={'kind': 'peer', 'from': 'a5730', 'name': 'Explore', 'handback': True},
         message={'content': '<cross-session-message from="a5730" from-name="Explore">조사 결과</cross-session-message>'}),
-    send(NOW - 30 * 3600, 's6', 'WF1', '[배정] 어제 일'), result('s6', msg_id='m6'),         # outside 24 h
+    send(NOW - 30 * 3600, 's6', 'web', '[배정] 어제 일'), result('s6', msg_id='m6'),         # outside 24 h
 ], tail='{"type":"assistant","message"')
-tr('-wf1', 'wf1sid', [
-    rec(type='agent-name', agentName='wf1-old'),
-    peer(T0 + 5, 'SUP', '[배정] T-1 할 일\n자세히', 'm1'),
-    peer(T0 + 65, 'SUP', '[알림] dev 재기동', 'm2'),
-    send(T0 + 190, 's7', 'SUP', '[보고] T-1 끝'), result('s7', msg_id='m3'),
-    rec(type='agent-name', agentName='WF1'),                                               # renamed: the node takes the latest name
+tr('-web', 'websid', [
+    rec(type='agent-name', agentName='web-old'),
+    peer(T0 + 5, 'hub', '[배정] T-1 할 일\n자세히', 'm1'),
+    peer(T0 + 65, 'hub', '[알림] dev 재기동', 'm2'),
+    send(T0 + 190, 's7', 'hub', '[보고] T-1 끝'), result('s7', msg_id='m3'),
+    rec(type='agent-name', agentName='web'),                                               # renamed: the node takes the latest name
 ])
-tr('-rel', 'relsid', [rec(type='agent-name', agentName='release'), peer(T0 + 95, 'SUP', '옛 형식 메시지', queued=True)])
-tr('-old', 'oldsid', [rec(type='agent-name', agentName='old'), send(NOW - 50 * 3600, 's8', 'SUP', '[보고] 옛날'), result('s8', msg_id='m8')],
+tr('-rel', 'relsid', [rec(type='agent-name', agentName='release'), peer(T0 + 95, 'hub', '옛 형식 메시지', queued=True)])
+tr('-old', 'oldsid', [rec(type='agent-name', agentName='old'), send(NOW - 50 * 3600, 's8', 'hub', '[보고] 옛날'), result('s8', msg_id='m8')],
    age=40 * 3600)
 os.makedirs(os.path.join(mp, '-hub', 'hubsid', 'subagents'))
 with open(os.path.join(mp, '-hub', 'hubsid', 'subagents', 'agent-x.jsonl'), 'w', encoding='utf-8', newline='') as g:
     g.write(send(T0, 's9', 'main', '서브에이전트 메시지') + result('s9', msg_id='m9'))
-names = {'SUP': {'group': 'resident', 'lane': 'HUB', 'task': '', 'order': 0}, 'WF1': {'group': 'resident', 'lane': 'WF1', 'task': '', 'order': 1}}
-live = [dict(name='WF1', sessionId='wf1sid', pid=222, state='working', status='busy', kind='background')]
+names = {'hub': {'group': 'resident', 'lane': 'HUB', 'task': '', 'order': 0}, 'web': {'group': 'resident', 'lane': 'WEB', 'task': '', 'order': 1}}
+live = [dict(name='web', sessionId='websid', pid=222, state='working', status='busy', kind='background')]
 M = lambda hours=24: server.messages(hours, now=NOW, root=mp, rows=live, names=names)
 r = M()
 got = [(m['id'], m['from'], m['to'], m['kind'], m['src']) for m in r['messages']]
-assert got == [('m4', 'task-old', 'SUP', 'report', 'recv'),          # sender transcript missing: the receipt stands in
-               ('m3', 'WF1', 'SUP', 'report', 'send'),
-               ('m5', 'SUP', 'release', 'other', 'send'),            # joined on body head and time
-               ('m2', 'SUP', 'WF1', 'notice', 'send'),               # uds address named by the receiver's transcript
-               ('m1', 'SUP', 'WF1', 'assign', 'send')], got
-assert r['total'] == 5 and r['hub'] == 'SUP' and r == M()   # same answer twice: the page skips re-drawing
+assert got == [('m4', 'task-old', 'hub', 'report', 'recv'),          # sender transcript missing: the receipt stands in
+               ('m3', 'web', 'hub', 'report', 'send'),
+               ('m5', 'hub', 'release', 'other', 'send'),            # joined on body head and time
+               ('m2', 'hub', 'web', 'notice', 'send'),               # uds address named by the receiver's transcript
+               ('m1', 'hub', 'web', 'assign', 'send')], got
+assert r['total'] == 5 and r['hub'] == 'hub' and r == M()   # same answer twice: the page skips re-drawing
 m1 = r['messages'][-1]
 assert m1['sum'] == '할 일 배정' and m1['text'] == '[배정] T-1 할 일\n자세히' and m1['t'] == T0 * 1000
 assert r['messages'][1]['sum'] == '[보고] T-1 끝'   # no summary: first line
-assert {(e['from'], e['to']): e['count'] for e in r['edges']} == {('SUP', 'WF1'): 2, ('WF1', 'SUP'): 1, ('SUP', 'release'): 1, ('task-old', 'SUP'): 1}
+assert {(e['from'], e['to']): e['count'] for e in r['edges']} == {('hub', 'web'): 2, ('web', 'hub'): 1, ('hub', 'release'): 1, ('task-old', 'hub'): 1}
 nodes = {n['name']: n for n in r['nodes']}
-assert nodes['SUP']['sent'] == 3 and nodes['SUP']['got'] == 2 and nodes['SUP']['group'] == 'resident' and not nodes['SUP']['listed']
-assert nodes['WF1']['listed'] and nodes['WF1']['state'] == 'working' and nodes['WF1']['sessionId'] == 'wf1sid'
+assert nodes['hub']['sent'] == 3 and nodes['hub']['got'] == 2 and nodes['hub']['group'] == 'resident' and not nodes['hub']['listed']
+assert nodes['web']['listed'] and nodes['web']['state'] == 'working' and nodes['web']['sessionId'] == 'websid'
 assert nodes['task-old']['group'] == 'task' and nodes['release']['group'] == 'task'   # neither listed nor in agents.json
 assert [m['id'] for m in M(0)['messages']][-3:] == ['m1', 'm6', 'm8'] and M(0)['total'] == 7   # all: the 30 h and 50 h ones too
 assert M(0.5)['total'] == 0 and M(1.5)['total'] == 5
-assert server.merge_messages([], [dict(t=1, to='WF1', **{'from': 'SUP'}, addr='', msg_id=None, text='x')])[0]['src'] == 'recv'
+assert server.merge_messages([], [dict(t=1, to='web', **{'from': 'hub'}, addr='', msg_id=None, text='x')])[0]['src'] == 'recv'
 # the uds address of a receipt names the send's target when no receipt of that message exists, then a live pid
-sends = [dict(t=1, to='uds:/x/7.sock', sum='', text='a', ok=True, msg_id='q1', **{'from': 'SUP'}),
-         dict(t=2, to='uds:/x/8.sock', sum='', text='b', ok=True, msg_id='q2', **{'from': 'SUP'}),
-         dict(t=3, to='uds:/x/6.sock', sum='', text='c', ok=True, msg_id='q3', **{'from': 'SUP'})]
-recvs = [dict(t=0, to='SUP', addr='uds:/x/7.sock', msg_id='q0', text='hi', **{'from': 'WF2'})]
-assert [m['to'] for m in server.merge_messages(sends, recvs, {8: 'release'})][:3] == ['uds:/x/6.sock', 'release', 'WF2']
+sends = [dict(t=1, to='uds:/x/7.sock', sum='', text='a', ok=True, msg_id='q1', **{'from': 'hub'}),
+         dict(t=2, to='uds:/x/8.sock', sum='', text='b', ok=True, msg_id='q2', **{'from': 'hub'}),
+         dict(t=3, to='uds:/x/6.sock', sum='', text='c', ok=True, msg_id='q3', **{'from': 'hub'})]
+recvs = [dict(t=0, to='hub', addr='uds:/x/7.sock', msg_id='q0', text='hi', **{'from': 'api'})]
+assert [m['to'] for m in server.merge_messages(sends, recvs, {8: 'release'})][:3] == ['uds:/x/6.sock', 'release', 'api']
 with open(hub, 'a', encoding='utf-8', newline='') as g:   # the partial line completes and a new report arrives: read incrementally
-    g.write(',"x":1}\n' + peer(NOW - 10, 'WF1', '[보고] 새 보고', 'm10'))
+    g.write(',"x":1}\n' + peer(NOW - 10, 'web', '[보고] 새 보고', 'm10'))
 assert server.messages(24, now=NOW, root=mp, rows=live, names=names)['messages'][0]['id'] == 'm10'
 shutil.rmtree(mp)
 
@@ -359,11 +359,11 @@ D = lambda now=MS: server.dev_occupancy(df, now)
 assert D() == {'state': 'missing', 'error': '파일 없음'}
 up = iso(NOW - 600)
 dwrite({'updated_at': up, 'items': [
-    {'who': 'task-wf1-supervisor', 'kind': 'run', 'what': 'WF1 dev 비교 실행', 'since': '2026-10-26T15:10:00+09:00', 'until': '', 'note': '허브 추정'},
+    {'who': 'task-web-supervisor', 'kind': 'run', 'what': 'web dev 비교 실행', 'since': '2026-10-26T15:10:00+09:00', 'until': '', 'note': '허브 추정'},
     'junk', {'who': 'release', 'kind': 'restart', 'what': 'dev Langflow 재기동', 'since': iso(NOW + 900), 'until': None}]})
 d = D()
 assert d['state'] == 'ok' and d['updatedAt'] == MS - 600000, d
-assert [i['who'] for i in d['items']] == ['release', 'task-wf1-supervisor']   # restart first, junk dropped
+assert [i['who'] for i in d['items']] == ['release', 'task-web-supervisor']   # restart first, junk dropped
 assert d['items'][0]['sinceAt'] == MS + 900000 and d['items'][0]['until'] == '' and d['items'][0]['untilAt'] is None
 assert d['items'][1]['sinceAt'] == server.iso_ms('2026-10-26T06:10:00Z') and d['items'][1]['note'] == '허브 추정'
 assert D(MS + 2 * 3600 * 1000)['state'] == 'stale'   # updated_at older than 2 h: faded, decided per request
@@ -450,12 +450,12 @@ os.makedirs(old)
 with open(os.path.join(old, 'oldsid-agent-oldsid.json'), 'w', encoding='utf-8', newline='') as f:
     json.dump([{'content': '옛 형식', 'status': 'in_progress', 'activeForm': '옛 형식 하는 중'}], f)
 os.utime(os.path.join(old, 'oldsid-agent-oldsid.json'), (now - 10, now - 10))
-rows = [{'sessionId': 'live-sid', 'name': 'WF1', 'state': 'working', 'group': 'resident', 'lane': 'WF1'}]
+rows = [{'sessionId': 'live-sid', 'name': 'web', 'state': 'working', 'group': 'resident', 'lane': 'WEB'}]
 t = server.todos(rows, tasks, old, now)
 assert [g['sid'] for g in t['groups']] == ['oldsid', 'live-sid', '0123456789abcdef'], t['groups']
 o, live, gone = t['groups']
 assert o['items'][0]['subject'] == '옛 형식' and o['closed'] and o['name'] == 'oldsid'
-assert live['name'] == 'WF1' and not live['closed'] and live['group'] == 'resident' and live['at'] == int((now - 30) * 1000)
+assert live['name'] == 'web' and not live['closed'] and live['group'] == 'resident' and live['at'] == int((now - 30) * 1000)
 assert [i['id'] for i in live['items']] == ['3', '2', '10', 'x', '1'], live['items']   # numeric ids, unknown status with pending
 assert live['items'][2]['blockedBy'] == ['2'] and live['items'][2]['owner'] == 'w'
 assert gone['closed'] and gone['stale'] and gone['name'] == '01234567' and 'group' not in gone

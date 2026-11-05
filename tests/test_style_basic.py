@@ -13,39 +13,39 @@ ENV.pop("CLAUDE_PLUGIN_OPTION_GIT_MESSAGE_CHECK", None)   # 켜기는 시험마�
 CASES = [
     # (이름, 기대, 명령)
     ("이모지 제목", "DENY", 'git commit -m "✨ 파서 복구"'),
-    ("PR 본문 이모지", "DENY", 'gh pr create --title "파서 복구" --body "\U0001f916 Generated"'),
+    ("PR 본문 이모지", "DENY", 'gh pr create --title "문구 복구" --body "\U0001f916 Generated"'),
     ("서술형 제목", "DENY", 'git commit -m "파서를 복구했습니다"'),
-    ("서술형 -ㄴ다", "DENY", 'git commit -m "파서 시그니처를 복구한다"'),
-    ("제목 마침표", "DENY", 'git commit -m "파서 시그니처 복구."'),
+    ("서술형 -ㄴ다", "DENY", 'git commit -m "오류 문구를 복구한다"'),
+    ("제목 마침표", "DENY", 'git commit -m "오류 문구 복구."'),
     ("본문 산문 -m 2회", "DENY",
-     'git commit -m "파서 복구" -m "이 커밋은 시그니처가 빠져서 생긴 퇴행을 되돌린다"'),
-    ("빈 줄 없음", "DENY", 'git commit -m "파서 복구\n- 시그니처 3종 복구"'),
+     'git commit -m "문구 복구" -m "이 커밋은 문구가 빠져서 생긴 퇴행을 되돌린다"'),
+    ("빈 줄 없음", "DENY", 'git commit -m "문구 복구\n- 오류 문구 3종 복구"'),
     ("이모티콘", "DENY", 'git merge --no-ff -m "브랜치 병합 :)"'),
     ("ㅋㅋ", "DENY", 'git commit -m "테스트 통과ㅋㅋ"'),
     ("제목 72칸 초과", "DENY",
-     'git commit -m "브론즈 파서 시그니처 3종과 sheet_all 및 data_to_eff 경로를 한꺼번에 복구하고 재적재까지 수행"'),
+     'git commit -m "로그인 오류 문구 3종과 reset_page 및 expire_notice 경로를 한꺼번에 복구하고 재생성까지 수행"'),
     ("본문 서술형 불릿", "DENY",
-     'git commit -m "파서 복구" -m "- 시그니처 3종을 복구했다"'),
+     'git commit -m "문구 복구" -m "- 오류 문구 3종을 복구했다"'),
     ("heredoc 이모지", "DENY",
-     "git commit -F - <<'EOF'\n\U0001f389 파서 복구\n\n- 퇴행 정정\nEOF"),
+     "git commit -F - <<'EOF'\n\U0001f389 문구 복구\n\n- 퇴행 정정\nEOF"),
 
-    ("정상 단문", "ALLOW", 'git commit -m "브론즈 파서 시그니처 3종 복구"'),
+    ("정상 단문", "ALLOW", 'git commit -m "로그인 오류 문구 3종 복구"'),
     ("정상 개조식 -m 2회", "ALLOW",
-     'git commit -m "브론즈 파서 시그니처 3종 복구" '
-     '-m "- xl_table 175 -> 189 퇴행 정정\n- p2_powder 700행 기준 재적용\n\n'
+     'git commit -m "로그인 오류 문구 3종 복구" '
+     '-m "- 문구 표 175 -> 189행 퇴행 정정\n- 영어판 700행 기준 재적용\n\n'
      'Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"'),
-    ("정상 영문", "ALLOW", 'git commit -m "Restore bronze parser signatures"'),
+    ("정상 영문", "ALLOW", 'git commit -m "Restore login error messages"'),
     ("정상 PR 본문", "ALLOW",
-     'gh pr create --title "파서 복구" --body "## 요약\n\n- 시그니처 3종 복구\n- 중복 적재 0건\n\nGenerated with [Claude Code](https://claude.com/claude-code)"'),
-    ("머지 정상", "ALLOW", 'git merge --no-ff feature/gold -m "골드 DAG 자산 연쇄 병합"'),
+     'gh pr create --title "문구 복구" --body "## 요약\n\n- 오류 문구 3종 복구\n- 중복 0건\n\nGenerated with [Claude Code](https://claude.com/claude-code)"'),
+    ("머지 정상", "ALLOW", 'git merge --no-ff feature/report -m "주간 리포트 작업 연쇄 병합"'),
     ("amend no-edit", "ALLOW", "git commit --amend --no-edit"),
     ("git 아님", "ALLOW", "ls -la && cat README.md"),
     ("git status", "ALLOW", "git status --short"),
     ("URL 포함", "ALLOW", 'git commit -m "레포 경로 https://gitlab.example.com/x 로 이관"'),
     ("변수 메시지", "ALLOW", 'git commit -m "$MSG"'),
-    ("화살표", "ALLOW", 'git commit -m "브론즈 -> 실버 적재 경로 정리"'),
+    ("화살표", "ALLOW", 'git commit -m "초안 -> 검토 단계 경로 정리"'),
     ("heredoc 정상", "ALLOW",
-     "git commit -F - <<'EOF'\n브론즈 파서 시그니처 3종 복구\n\n- xl_table 퇴행 정정\nEOF"),
+     "git commit -F - <<'EOF'\n로그인 오류 문구 3종 복구\n\n- 문구 표 퇴행 정정\nEOF"),
     # 오탐 회귀: 히어독 본문에 git 명령 '글자'만 들어 있는 경우
     ("문서 쓰기(글자만)", "ALLOW",
      "cat > /tmp/doc.md <<'EOF'\n훅은 git commit|merge|tag|revert 를 검사한다\n\n제목과 본문\n산문 한 문단\nEOF"),
@@ -87,7 +87,7 @@ for name, want, cmd in CASES:
             print("      " + out.replace("\n", "\n      ")[:600])
 # Git Bash 없는 Windows 의 PowerShell 도구도 같은 규칙으로 막는다
 for name, want, cmd in [("PowerShell 위반", "DENY", 'git commit -m "파서를 복구했습니다"'),
-                        ("PowerShell 정상", "ALLOW", 'git commit -m "파서 시그니처 복구"')]:
+                        ("PowerShell 정상", "ALLOW", 'git commit -m "오류 문구 복구"')]:
     got = run(cmd, "PowerShell")[0]
     print("%s  %s" % ("PASS" if got == want else "FAIL", name))
     fail += got != want

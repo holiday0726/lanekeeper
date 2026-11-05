@@ -28,10 +28,10 @@ CASES = [
      "git commit -F - <<'B'\n둘째 제목을 정리했다\n\n- 본문 B\nB\n"),
     ("실제로 막혔던 명령 재현", "ALLOW",
      "git add x\n"
-     "git commit -q -F - <<'MSG'\n보고6 회차 DAG 과 골드 context 자산 추가\n\n"
-     "- assets.py 에 GOLD_CTX 추가\n- task.py 에 3태스크 추가\nMSG\n"
+     "git commit -q -F - <<'MSG'\n주간 리포트 DAG 과 요약 context 자산 추가\n\n"
+     "- assets.py 에 SUMMARY_CTX 추가\n- task.py 에 3태스크 추가\nMSG\n"
      "git checkout -q main && git reset --hard origin/main -q\n"
-     'git merge --no-ff br -q -m "보고6 DAG 병합\n\n- GOLD_CTX 자산으로 연쇄\n- 최초 paused"\n'),
+     'git merge --no-ff br -q -m "주간 리포트 DAG 병합\n\n- SUMMARY_CTX 자산으로 연쇄\n- 최초 paused"\n'),
 ]
 
 fail = 0

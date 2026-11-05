@@ -31,11 +31,11 @@ diff 를 읽으면 아는 것(파일 목록, 함수명 나열)은 적지 않는�
 커밋
 
 ```
-브론즈 파서 시그니처 3종 복구
+로그인 오류 문구 3종 복구
 
-- 이관 때 누락된 관리손익 시그니처 복원, xl_table 175 -> 189
-- p2_powder 748 -> 700행 기준 재적용
-- sales_excel 재실행 시 중복 적재 0건 확인
+- 이관 때 빠진 만료 안내 문구 복원, 문구 표 175 -> 189행
+- 영어판 748 -> 700행 기준 재적용
+- 문구 표 재생성 시 중복 0건 확인
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ```
@@ -43,10 +43,10 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 머지도 같다. 제목에 병합 대상, 본문에 이 병합이 들여오는 변화를 항목으로 적는다.
 
 ```
-feature/gold 병합 - 골드 DAG 자산 연쇄
+feature/report 병합 - 주간 리포트 작업 연쇄
 
-- hsgld 집계 6표 적재 태스크 추가
-- refine 완료 후 자산 연쇄로 자동 기동
+- 주간 집계 표 6개 적재 태스크 추가
+- 정제 완료 후 작업 연쇄로 자동 기동
 - schedule=None, 기본 dry_run=true 유지
 ```
 

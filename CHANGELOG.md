@@ -12,6 +12,7 @@ A new dashboard design. Nothing to change in your settings or your hub folder. A
 - At 1000px or wider the tabs move to a sidebar, and the usage meters become rings at its foot.
 - New colours: near-black surfaces in steps with one orange accent (#E2560B). The state "입력 필요" (needs input) is now "대기 중" (waiting) and is orange in both themes. Card outlines are gone.
 - `#/demo` adds buttons that change a session's scene in your browser only, to try the scenes. Nothing is sent to the sessions.
+- Internal names are cleaned out of the examples and test data. The git message examples, the dashboard tests and the notes in `dashboard/README.md` now use neutral sample names and no readings from one machine.
 
 ### Added
 
