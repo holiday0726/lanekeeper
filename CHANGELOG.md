@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.1
+
+### Changed
+
+- The session start message no longer assumes SSH. When opening the Orca tab fails, it no longer points to Orca's SSH settings and instead says to allow the orca CLI in Orca or turn off the `orca` setting. Without the `orca` command there is still no Orca text at all.
+- The session start message now always ends with a pointer to the README section "다른 PC 에서 보기" (Viewing from another PC). It does not guess whether the session is remote.
+
+### Added
+
+- README section [Viewing from another PC](https://github.com/holiday0726/lanekeeper/blob/main/README.md#viewing-from-another-pc) ([한국어](https://github.com/holiday0726/lanekeeper/blob/main/README.ko.md#다른-pc-에서-보기)): same PC, clients that forward ports (VS Code/Cursor Remote, Orca), and clients without port forwarding such as Paseo (`ssh -N -L <port>:127.0.0.1:<port> <user>@<host>`). The dashboard still listens only on `127.0.0.1`.
+- `/lanekeeper:setup` gives the same guidance at the end instead of assuming an SSH client.
+
 ## 0.4.0
 
 This release renames the plugin. Existing users need to reinstall.

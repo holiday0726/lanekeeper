@@ -126,9 +126,25 @@ claude plugin install addy-skills --marketplace holiday0726/Addy-skills
 1. 설정값은 Claude Code 를 다시 열어야 적용된다.
    지금 세션을 닫는다.
 2. 허브 폴더에서 세션을 연다(`cd <허브 폴더>` 뒤 `claude`).
-   `대시보드 http://127.0.0.1:4990 떠 있음` 이 보이면 브라우저로 연다.
+   `대시보드 http://127.0.0.1:4990 떠 있음` 으로 시작하는 줄이 보이면 브라우저로 연다.
+   다른 PC 의 브라우저로 볼 때는 아래 "다른 PC 에서 대시보드 보기" 를 알린다.
 3. 허브 세션 안에서 `/rename hub` 를 입력한다.
    대시보드는 `agents.json` 의 `hub` 세션을 허브로 본다.
 4. 손으로 채울 자리: `.claude/settings.json` 의 `<레인 저장소>` 자리, `supervisor.settings.json` 의 `autoMode.allow`, `CLAUDE.md` 와 `COORDINATION.md` 의 `<...>` 자리.
 
 3단계에서 `kept` 가 나온 키와 4단계에서 바꾸지 않은 값이 있으면 여기서 다시 짚는다.
+
+## 다른 PC 에서 대시보드 보기
+
+사용자가 어떤 클라이언트로 붙어 있는지 짐작하지 않는다.
+SSH 라고 단정하지 말고, 아래 세 경우를 그대로 알린다.
+README 의 "다른 PC 에서 보기"(영어판 "Viewing from another PC") 절과 같은 내용이다.
+
+- 같은 PC 면 `http://127.0.0.1:<포트>` 를 그대로 연다.
+- 포트를 전달해 주는 클라이언트(VS Code 나 Cursor 의 Remote, Orca)면 전달된 같은 번호의 `http://127.0.0.1:<포트>` 를 연다.
+  대시보드는 Host 가 `127.0.0.1:<포트>`, `localhost:<포트>` 인 요청만 받으므로 PC 쪽 포트가 다르면 `bad host` 가 난다.
+- Paseo 처럼 포트를 전달하지 않으면 PC 에서 `ssh -N -L <포트>:127.0.0.1:<포트> <사용자>@<호스트>` 를 띄워 둔 채 `http://127.0.0.1:<포트>` 를 연다.
+  Windows PowerShell 도 같은 명령이다.
+
+`0.0.0.0` 으로 열거나 공개 터널 서비스를 권하지 않는다.
+대시보드에는 인증이 없어 주소에 닿는 누구나 세션 대화 기록과 로그를 읽는다.

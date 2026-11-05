@@ -3,7 +3,7 @@
 
 플러그인 설정(훅에는 CLAUDE_PLUGIN_OPTION_* 로 온다): hub_dir, dashboard_port(기본 4990), orca(기본 켬).
 플러그인은 모든 세션에 붙으므로 프로젝트 폴더가 허브 폴더가 아니면 아무것도 하지 않는다.
-Orca 탭 열기는 Orca 의 Settings > SSH 에서 "Allow this host's orca CLI to control Orca" 가 켜져 있어야 된다.
+orca 명령이 없으면 Orca 이야기는 꺼내지 않는다. 원격인지는 짐작하지 않고, 다른 PC 에서 볼 길은 늘 README 절로 가리킨다.
 """
 import json
 import os
@@ -67,7 +67,7 @@ def orca_tab(url, port):
             return ', Orca 탭을 열었음'
     except (OSError, subprocess.SubprocessError):
         pass
-    return ", Orca 탭 열기 실패(Orca Settings > SSH 에서 이 호스트의 'Allow this host's orca CLI to control Orca' 를 켜야 함)"
+    return ', Orca 탭 열기 실패(Orca 에서 이 호스트의 orca CLI 제어를 허용하거나, Orca 를 쓰지 않으면 설정 orca 를 끔)'
 
 
 def main():
@@ -93,6 +93,7 @@ def main():
     msg = '대시보드 %s %s' % (url, '떠 있음' if up(url + '/') else '안 뜸(로그 %s)' % log)
     if opt('orca', 'true').lower() in ('true', '1', 'yes', 'on'):
         msg += orca_tab(url, port)
+    msg += '. 다른 PC 에서 볼 때는 README 의 "다른 PC 에서 보기"'
     print(json.dumps({'systemMessage': msg}, ensure_ascii=False))
     return 0
 

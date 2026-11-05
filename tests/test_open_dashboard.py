@@ -30,10 +30,15 @@ url = 'http://127.0.0.1:%d' % port
 opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
-def hook(project):
+HINT = '. 다른 PC 에서 볼 때는 README 의 "다른 PC 에서 보기"'
+
+
+def hook(project, **extra):
     env = dict(os.environ, CLAUDE_PLUGIN_OPTION_HUB_DIR=hub, CLAUDE_PLUGIN_OPTION_DASHBOARD_PORT=str(port),
                CLAUDE_PLUGIN_OPTION_ORCA='false', CLAUDE_PROJECT_DIR=project, CLAUDE_PLUGIN_DATA=data,
                PYTHONIOENCODING='cp949')
+    env.update(extra)
+    env = {k: v for k, v in env.items() if v is not None}   # None 은 설정하지 않은 값: 환경변수로 오지 않는다
     payload = json.dumps({'hook_event_name': 'SessionStart', 'source': 'startup', 'cwd': project}).encode()
     t = time.time()
     r = subprocess.run([sys.executable, HOOK], input=payload, env=env, capture_output=True, timeout=30)
@@ -58,7 +63,7 @@ pid = None
 try:
     out, took = hook(hub)
     msg = json.loads(out)['systemMessage']
-    assert msg == '대시보드 %s 떠 있음' % url, msg
+    assert msg == '대시보드 %s 떠 있음' % url + HINT, msg
     assert took < 10, '훅이 서버 출력 파이프를 물고 기다렸음: %.1f 초' % took
     log = open(os.path.join(data, 'dashboard-%d.log' % port), encoding='utf-8').read()
     pid = int(re.search(r'pid (\d+)', log).group(1))
@@ -68,8 +73,25 @@ try:
     assert get('/api/dev')['items'] == [] and get('/api/decisions')['error'] == ''
 
     out, took = hook(os.path.join(hub, 'reports'))   # 허브 하위 폴더에서 다시 열기: 떠 있으니 다시 띄우지 않는다
-    assert json.loads(out)['systemMessage'].endswith('떠 있음') and took < 3, (out, took)
+    assert json.loads(out)['systemMessage'] == '대시보드 %s 떠 있음' % url + HINT and took < 3, (out, took)
     assert len(re.findall(r'pid \d+', open(os.path.join(data, 'dashboard-%d.log' % port), encoding='utf-8').read())) == 1
+
+    # orca 설정을 두지 않으면 기본 켬이지만, orca 명령이 없으면 Orca 이야기는 없다
+    bare = os.path.join(tmp, 'bare')
+    os.makedirs(bare)
+    msg = json.loads(hook(hub, CLAUDE_PLUGIN_OPTION_ORCA=None, PATH=bare)[0])['systemMessage']
+    assert msg == '대시보드 %s 떠 있음' % url + HINT, msg
+
+    # orca 명령이 있는데 탭을 못 열면 실패를 알리되 SSH 를 가정하지 않는다
+    fake = os.path.join(tmp, 'fake')
+    os.makedirs(fake)
+    with open(os.path.join(fake, 'orca'), 'w') as f:
+        f.write('#!/bin/sh\necho \'{"ok": false}\'\n')
+    os.chmod(os.path.join(fake, 'orca'), 0o755)
+    with open(os.path.join(fake, 'orca.bat'), 'w') as f:
+        f.write('@echo {"ok": false}\n')
+    msg = json.loads(hook(hub, CLAUDE_PLUGIN_OPTION_ORCA=None, PATH=fake + os.pathsep + bare)[0])['systemMessage']
+    assert 'Orca 탭 열기 실패' in msg and 'SSH' not in msg and msg.endswith(HINT), msg
 finally:
     if pid:
         os.kill(pid, signal.SIGTERM)

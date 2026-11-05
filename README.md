@@ -80,7 +80,8 @@ cd ~/hub
 claude
 ```
 
-When the session opens and shows `대시보드 http://127.0.0.1:4990 떠 있음` (dashboard is up), open that address in a browser.
+When the session opens and shows a line starting with `대시보드 http://127.0.0.1:4990 떠 있음` (dashboard is up), open that address in a browser.
+To view it from a browser on another PC, see [Viewing from another PC](#viewing-from-another-pc). The hook message points to the Korean heading of the same section, "다른 PC 에서 보기".
 In the hub session, type `/rename hub`.
 Then fill in the `<...>` spots as in steps 1, 2 and 5 of [Set up the hub folder](#set-up-the-hub-folder).
 
@@ -262,6 +263,20 @@ $env:HUB_DIR = "C:\Users\<you>\hub"; $env:PORT = "4990"; py -3 C:\Users\<you>\la
 ```
 
 The log of a server started by the hook is at `~/.claude/plugins/data/lanekeeper-lanekeeper/dashboard-<port>.log`, and its first line has the server pid. To stop it, run `kill <pid>` (on Windows `Stop-Process -Id <pid>`). Each screen is described in [dashboard/README.md](dashboard/README.md) (Korean).
+
+### Viewing from another PC
+
+The dashboard listens only on `127.0.0.1`, so it opens only on the computer where Claude Code runs. To view it in a browser on another PC, it depends on your client.
+
+- Same PC: open `http://127.0.0.1:<port>` as is.
+- A client that forwards ports (VS Code or Cursor Remote, Orca): open the forwarded `http://127.0.0.1:<port>`. The dashboard answers only requests addressed to `127.0.0.1:<port>` or `localhost:<port>`, so the port on your PC must be the same number. If it is forwarded to a different number you get `bad host`.
+- A client that does not forward ports, such as Paseo: keep the command below running on your PC and open `http://127.0.0.1:<port>`. The same command works in Windows PowerShell. If you changed the port, replace both 4990s with it. Your PC must be able to SSH to that host, and closing the window ends the tunnel.
+
+  ```sh
+  ssh -N -L 4990:127.0.0.1:4990 <user>@<host>
+  ```
+
+Do not bind it to `0.0.0.0` or put it behind a public tunnel service. The dashboard has no login, so anyone who can reach the address can read session conversations and logs.
 
 ## Hooks
 
