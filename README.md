@@ -92,7 +92,7 @@ To get a new version, see [Updating](#updating).
 
 ## Updating
 
-Claude Code does not update this marketplace by itself. Background auto-update is on by default only for Anthropic's own marketplaces, so get a new version in a terminal.
+For a marketplace added from GitHub, like this one, Claude Code's background auto-update is off by default, so get a new version in a terminal.
 
 ```sh
 claude plugin marketplace update lanekeeper

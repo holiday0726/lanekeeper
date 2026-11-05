@@ -88,7 +88,7 @@ claude
 
 ## 업데이트
 
-Claude Code 는 이 마켓플레이스를 스스로 갱신하지 않습니다. 백그라운드 자동 업데이트는 Anthropic 의 공식 마켓플레이스에만 기본으로 켜져 있으므로, 새 판은 터미널에서 받습니다.
+이 마켓플레이스처럼 GitHub 에서 추가한 마켓플레이스는 Claude Code 의 백그라운드 자동 업데이트가 기본으로 꺼져 있으므로, 새 판은 터미널에서 받습니다.
 
 ```sh
 claude plugin marketplace update lanekeeper

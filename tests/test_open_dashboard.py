@@ -107,7 +107,7 @@ try:
             except OSError:
                 time.sleep(0.1)
         msg = json.loads(hook(hub, CLAUDE_PLUGIN_OPTION_DASHBOARD_PORT=str(port2))[0])['systemMessage']
-        assert '떠 있음, 다만 플러그인' in msg and '다른 판(0.4.1 이하)' in msg and msg.endswith(HINT), msg
+        assert re.search(r'떠 있음, 다만 서버 판\(0\.4\.1 이하\)이 플러그인 판\(\d+\.\d+\.\d+\)과 달라', msg) and msg.endswith(HINT), msg
         assert not os.path.exists(os.path.join(data, 'dashboard-%d.log' % port2)), '떠 있는 포트에 서버를 또 띄웠음'
     finally:
         old.terminate()

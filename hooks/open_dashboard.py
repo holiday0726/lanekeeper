@@ -103,8 +103,8 @@ def main():
     running, mine = up(url + '/'), version()
     msg = '대시보드 %s %s' % (url, '떠 있음' if running is not None else '안 뜸(로그 %s)' % log)
     if running is not None and running != mine:   # 업데이트 전에 띄운 서버는 옛 화면을 계속 보여 준다
-        msg += ', 다만 플러그인 %s 와 다른 판(%s)의 서버라 끄고 세션을 다시 열면 새 판이 뜸(끄는 법은 README "업데이트")' % (
-            mine or '?', running or '0.4.1 이하')
+        msg += ', 다만 서버 판(%s)이 플러그인 판(%s)과 달라 끄고 세션을 다시 열면 새 판이 뜸(끄는 법은 README "업데이트")' % (
+            running or '0.4.1 이하', mine or '?')
     if opt('orca', 'true').lower() in ('true', '1', 'yes', 'on'):
         msg += orca_tab(url, port)
     msg += '. 다른 PC 에서 볼 때는 README 의 "다른 PC 에서 보기"'
