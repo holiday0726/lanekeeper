@@ -22,6 +22,18 @@ from urllib.parse import parse_qs, urlparse
 
 HOST, PORT = '127.0.0.1', int(os.environ.get('PORT', 4990))
 ROOT = os.path.dirname(os.path.abspath(__file__))
+
+
+def plugin_version():
+    """lanekeeper version this copy came with; the SessionStart hook compares it to spot a server left from an older version."""
+    try:
+        with open(os.path.join(ROOT, '..', '.claude-plugin', 'plugin.json'), encoding='utf-8') as f:
+            return str(json.load(f)['version'])
+    except (OSError, ValueError, KeyError, TypeError):
+        return ''
+
+
+VERSION = plugin_version()
 PROJECTS = os.path.expanduser('~/.claude/projects')
 JOBS = os.path.expanduser('~/.claude/jobs')
 HUB = os.path.abspath(os.path.expanduser(os.environ.get('HUB_DIR') or '.'))   # hub folder; the four files below are read only
@@ -43,6 +55,8 @@ STATIC = {
     '/vendor/xterm.js': ('vendor/xterm.js', 'text/javascript; charset=utf-8'),
     '/vendor/xterm.css': ('vendor/xterm.css', 'text/css; charset=utf-8'),
     '/vendor/WantedSansVariable.woff2': ('vendor/WantedSansVariable.woff2', 'font/woff2'),
+    '/vendor/three.min.js': ('vendor/three.min.js', 'text/javascript; charset=utf-8'),
+    '/vendor/OrbitControls.js': ('vendor/OrbitControls.js', 'text/javascript; charset=utf-8'),
 }
 MAX_EVENTS = 500       # events sent on the first read (30 MB parses in ~0.2 s)
 MAX_MESSAGES = 300     # newest messages sent by /api/messages; edge counts still use all of them
@@ -898,6 +912,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Length', str(len(body)))
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('X-Lanekeeper-Version', VERSION)
         self.end_headers()
         self.wfile.write(body)
 

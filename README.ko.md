@@ -4,7 +4,10 @@
 
 Claude Code 세션 하나를 허브로 두고, 허브가 다른 세션들에 일을 나눠 맡기고 보고를 받아 기록하게 만드는 플러그인입니다. 허브가 따를 규칙 문서 틀과 세션 현황을 보는 로컬 대시보드, 허브 폴더를 지키는 훅이 함께 들어 있습니다.
 
-<img alt="대시보드 데모: 배정이 흐름 탭에 뜨고, 보고가 돌아오고, 현황 탭에 반영되고, 결정 탭에 사용자 결정이 모입니다" src="docs/images/demo.gif" width="800">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/dashboard-dark.png">
+  <img alt="대시보드 에이전트 탭: 왼쪽에 탭과 사용량 링이 있는 사이드바, 위에 세션마다 책상이 있고 허브는 제자리가 있는 아이소메트릭 3D 오피스, 아래에 허브를 가운데 둔 세션 흐름도" src="docs/images/dashboard-light.png" width="800">
+</picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.png">
@@ -81,7 +84,29 @@ claude
 허브 세션 안에서 `/rename hub` 를 입력합니다.
 그다음 [허브 폴더 만들기](#허브-폴더-만들기) 의 1, 2, 5 번대로 `<...>` 자리를 채웁니다.
 
-새 판은 `claude plugin marketplace update lanekeeper` 와 `claude plugin update lanekeeper@lanekeeper` 로 받고, 세션을 다시 엽니다.
+새 판을 받는 법은 [업데이트](#업데이트)에 있습니다.
+
+## 업데이트
+
+Claude Code 는 이 마켓플레이스를 스스로 갱신하지 않습니다. 백그라운드 자동 업데이트는 Anthropic 의 공식 마켓플레이스에만 기본으로 켜져 있으므로, 새 판은 터미널에서 받습니다.
+
+```sh
+claude plugin marketplace update lanekeeper
+claude plugin update lanekeeper@lanekeeper
+```
+
+새 판은 Claude Code 를 다시 열 때 올라옵니다. 이미 열려 있는 세션에서는 `/reload-plugins` 를 입력합니다.
+백그라운드에서 받게 하려면 세션에서 `/plugin` 을 열고 **Marketplaces** 에서 `lanekeeper` 를 골라 **Enable auto-update** 를 누릅니다. 그러면 세션에서 첫 메시지를 보낸 뒤 10분 안에 확인하고, 새 판을 받으면 `Plugin updated: … · Run /reload-plugins to apply` 줄을 보여 줍니다.
+
+이미 떠 있는 대시보드는 옛 판 화면을 계속 보여 줍니다. 훅은 서버가 없을 때만 띄우기 때문입니다. 로그 첫 줄의 pid 로 서버를 끄고([대시보드](#대시보드) 참고) 허브 세션을 다시 엽니다. 0.5.0 부터는 떠 있는 서버가 다른 판이면 세션 시작 메시지가 그렇게 알려 줍니다.
+
+업데이트는 `~/.claude/plugins/cache/` 아래 플러그인 사본만 바꿉니다. 아래는 그대로 남습니다.
+
+- 허브 폴더: `/lanekeeper:setup` 이 복사한 규칙 문서와 데이터 파일, `.claude/settings.json`, `supervisor.settings.json`. 설치 스킬은 있는 파일을 덮지 않으므로 새 판에서 `templates/hub/` 가 바뀌어도 이미 만든 허브 폴더에는 들어가지 않습니다. [CHANGELOG](CHANGELOG.md) 에 틀 변경이 적혀 있으면 `templates/hub/` 와 직접 비교합니다.
+- 사용자 설정(`~/.claude/settings.json`)과 플러그인 이름 아래 저장된 플러그인 설정값(`python`, `hub_dir` 등).
+- `~/.claude/plugins/data/lanekeeper-lanekeeper/` 의 대시보드 로그.
+
+받은 폴더로 설치했다면([손으로 설치하기](#손으로-설치하기)) 그 폴더에서 `git pull` 합니다.
 
 ## 옛 이름에서 옮기기
 
@@ -229,24 +254,24 @@ Copy-Item "$src\examples\supervisor.settings.json" "$hub\supervisor.settings.jso
 
 허브 폴더의 `agents.json`, `decisions.json`, `STATUS.md`, `dev-occupancy.json` 과 `~/.claude` 아래 세션 기록을 몇 초마다 읽어 보여 줍니다. 읽기만 하고, 세션에 입력을 보내거나 멈추지 않습니다.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/dashboard-dark.png">
-  <img alt="대시보드 에이전트 탭: 위에 사용량과 dev 점유 줄, 아래에 진행 중, 입력 대기 세션 카드" src="docs/images/dashboard-light.png" width="480">
-</picture>
+<img alt="대시보드 오피스 장면: 허브가 배정을 보내면 허브 자리에서 세션 책상으로 오렌지 서류가 날아가고, 작업 중인 세션은 켜진 모니터 앞에서 일하고 쉬는 세션은 라운지에 앉아 있습니다" src="docs/images/demo.gif" width="800">
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/dashboard-flow-dark.png">
-  <img alt="대시보드 흐름 탭: 허브를 가운데 두고 세션 사이에 오간 배정과 보고를 그린 그래프" src="docs/images/dashboard-flow-light.png" width="480">
+  <img alt="대시보드 흐름 탭: 허브를 가운데 두고 세션 사이에 오간 배정과 보고를 호로 그린 기울어진 3D 그래프와 그 아래 메시지 목록" src="docs/images/dashboard-flow-light.png" width="800">
 </picture>
 
 화면의 세션과 데이터는 설명용 견본입니다.
 
 | 탭 | 보여 주는 것 |
 |---|---|
-| 에이전트 | 세션을 진행 중, 입력 대기, 종료로 나눈 카드. 누르면 대화 기록과 `claude logs` 화면 |
+| 에이전트 | 맨 위는 아이소메트릭 3D 오피스입니다. 세션마다 책상이 있고, 작업 중이면 앉아서 일하고, 사용자를 기다리면 오렌지 `!` 를 띄우고, 쉬면 라운지로 걸어갑니다. 배정과 보고 서류가 허브와 책상 사이를 날아갑니다. 끌면 방이 돌고, 사람을 누르면 그 세션으로 갑니다. 아래는 허브를 가운데 둔 흐름도나 카드 목록이고, 세션을 누르면 대화 기록과 `claude logs` 화면이 나옵니다. WebGL 이 없으면 흐름도만 보입니다 |
 | 결정 | `decisions.json` 의 결정 항목과 지금 사용자 입력을 기다리는 세션 |
 | 현황 | `STATUS.md` |
-| 흐름 | 세션 사이 `SendMessage` 를 그래프와 목록으로. `[배정]`, `[보고]`, `[알림]` 머리말로 종류를 나눕니다 |
+| 흐름 | 세션 사이 `SendMessage` 를 그래프와 목록으로. 그래프는 기본이 기울어진 입체이고(끌거나 화살표 키로 돌림) 평면으로 바꿀 수 있습니다. `[배정]`, `[보고]`, `[알림]` 머리말로 종류를 나눕니다 |
 | 할 일 | 세션별 할 일 목록 |
+
+창 폭이 1000px 이상이면 탭이 왼쪽 사이드바로 가고 남은 사용량 링은 그 아래 칸에 놓입니다.
 
 허브 폴더에서 세션을 열면 훅이 대시보드를 띄워 주므로 따로 실행할 일은 없습니다. 손으로 띄울 때는 허브 폴더와 포트를 환경변수로 줍니다.
 
@@ -280,7 +305,7 @@ $env:HUB_DIR = "C:\Users\<나>\hub"; $env:PORT = "4990"; py -3 C:\Users\<나>\la
 
 | 훅 | 언제 | 하는 일 |
 |---|---|---|
-| 대시보드 열기 (`open_dashboard.py`) | 세션 시작(SessionStart) | 프로젝트 폴더가 `hub_dir` 이거나 그 아래일 때만 동작합니다. 대시보드가 꺼져 있으면 띄우고, `orca` 가 켜져 있으면 Orca 탭으로 엽니다 |
+| 대시보드 열기 (`open_dashboard.py`) | 세션 시작(SessionStart) | 프로젝트 폴더가 `hub_dir` 이거나 그 아래일 때만 동작합니다. 대시보드가 꺼져 있으면 띄우고, `orca` 가 켜져 있으면 Orca 탭으로 엽니다. 떠 있는 서버가 다른 판이면 끄라고 알립니다([업데이트](#업데이트)) |
 | 허브 폴더 보호 (`hub_only_write.py`) | Edit, Write, NotebookEdit 직전 | 허브 폴더 밖에서 연 세션이 허브 폴더의 파일을 고치려 하면 막고, 허브에 보고하라고 알립니다. Windows 경로는 대소문자와 역슬래시, `/c/` 꼴을 같은 경로로 봅니다 |
 | git 문구 검사 (`git-message-style.py`) | Bash, PowerShell 명령 직전 | `git commit`, `merge`, `tag`, `revert` 와 `gh pr create`, `edit` 문구가 개조식 규칙을 어기면 막습니다. 기본은 꺼짐이고 설정값 `git_message_check` 를 `true` 로 넣으면 켜집니다. 켠 뒤 잠시 끄려면 환경변수 `CLAUDE_GIT_STYLE=off` |
 
@@ -325,6 +350,7 @@ Windows 에서는 `python3` 자리에 `py -3` 을 씁니다. 훅 시험은 Windo
 MIT 라이선스입니다([LICENSE](LICENSE)). 함께 넣은 것은 각자의 라이선스를 따릅니다.
 
 - `skills/humanizer`: [blader/humanizer](https://github.com/blader/humanizer), MIT, `skills/humanizer/LICENSE`
+- `dashboard/vendor/three.min.js`, `OrbitControls.js`: [three.js](https://github.com/mrdoob/three.js) r128(npm 0.128.0, 고치지 않음), MIT, `dashboard/vendor/three-LICENSE`
 - `dashboard/vendor/xterm.js`, `xterm.css`: [xterm.js](https://github.com/xtermjs/xterm.js) 5.5.0, MIT, `dashboard/vendor/xterm-LICENSE`
 - `dashboard/vendor/WantedSansVariable.woff2`: [Wanted Sans](https://github.com/wanteddev/wanted-sans) 1.0.3, SIL OFL 1.1, `dashboard/vendor/WantedSans-OFL.txt`
 

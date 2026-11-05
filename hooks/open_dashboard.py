@@ -4,6 +4,7 @@
 플러그인 설정(훅에는 CLAUDE_PLUGIN_OPTION_* 로 온다): hub_dir, dashboard_port(기본 4990), orca(기본 켬).
 플러그인은 모든 세션에 붙으므로 프로젝트 폴더가 허브 폴더가 아니면 아무것도 하지 않는다.
 orca 명령이 없으면 Orca 이야기는 꺼내지 않는다. 원격인지는 짐작하지 않고, 다른 PC 에서 볼 길은 늘 README 절로 가리킨다.
+떠 있는 서버의 판(X-Lanekeeper-Version)이 이 플러그인 판과 다르면 업데이트 전 서버이므로 끄고 다시 열라고 한 줄 붙인다.
 """
 import json
 import os
@@ -25,12 +26,21 @@ def opt(key, default=''):
     return os.environ.get('CLAUDE_PLUGIN_OPTION_' + key.upper()) or default
 
 
+def version():
+    try:
+        with open(os.path.join(ROOT, '.claude-plugin', 'plugin.json'), encoding='utf-8') as f:
+            return str(json.load(f)['version'])
+    except (OSError, ValueError, KeyError, TypeError):
+        return ''
+
+
 def up(url):
+    """떠 있으면 서버가 알린 판(0.4.1 이하는 빈 글자), 안 떠 있으면 None."""
     try:   # 회사 PC 의 시스템 프록시를 타지 않게 프록시 없이 연다
-        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(url, timeout=2):
-            return True
+        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(url, timeout=2) as r:
+            return r.headers.get('X-Lanekeeper-Version', '')
     except OSError:
-        return False
+        return None
 
 
 def start(hub, port):
@@ -84,13 +94,17 @@ def main():
     port = int(float(opt('dashboard_port', '4990')))
     url = 'http://127.0.0.1:%d' % port
     log = ''
-    if not up(url + '/'):
+    if up(url + '/') is None:
         log = start(native(hub), port)
         for _ in range(10):
             time.sleep(0.5)
-            if up(url + '/'):
+            if up(url + '/') is not None:
                 break
-    msg = '대시보드 %s %s' % (url, '떠 있음' if up(url + '/') else '안 뜸(로그 %s)' % log)
+    running, mine = up(url + '/'), version()
+    msg = '대시보드 %s %s' % (url, '떠 있음' if running is not None else '안 뜸(로그 %s)' % log)
+    if running is not None and running != mine:   # 업데이트 전에 띄운 서버는 옛 화면을 계속 보여 준다
+        msg += ', 다만 플러그인 %s 와 다른 판(%s)의 서버라 끄고 세션을 다시 열면 새 판이 뜸(끄는 법은 README "업데이트")' % (
+            mine or '?', running or '0.4.1 이하')
     if opt('orca', 'true').lower() in ('true', '1', 'yes', 'on'):
         msg += orca_tab(url, port)
     msg += '. 다른 PC 에서 볼 때는 README 의 "다른 PC 에서 보기"'

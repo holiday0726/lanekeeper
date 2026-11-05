@@ -462,4 +462,7 @@ assert gone['closed'] and gone['stale'] and gone['name'] == '01234567' and 'grou
 assert t['counts'] == {'in_progress': 2, 'pending': 2}, t['counts']   # stale groups and unknown status stay out of the tab count
 assert server.todos([], os.path.join(d, 'none'), os.path.join(d, 'none')) == {'groups': [], 'counts': {'in_progress': 0, 'pending': 0}}
 shutil.rmtree(d)
+
+missing = [n for n, _ in server.STATIC.values() if not os.path.isfile(os.path.join(server.ROOT, n))]
+assert not missing, missing   # every page and vendor file the server hands out is in the folder
 print('ok')

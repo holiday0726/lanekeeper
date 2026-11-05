@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.0
+
+A new dashboard design. Nothing to change in your settings or your hub folder. After updating, stop the dashboard that is already running so the new one can start ([Updating](https://github.com/holiday0726/lanekeeper/blob/main/README.md#updating), [한국어](https://github.com/holiday0726/lanekeeper/blob/main/README.ko.md#업데이트)).
+
+### Changed
+
+- The Agents tab opens with an isometric 3D office. Each session has a desk and the hub has its own seat. A working session sits at a lit screen, a waiting one shows an orange `!`, and a resting one walks to the lounge. A new `[배정]` (assignment) from the hub flies a sheet to that desk and a `[보고]` (report) flies one back. Drag to turn the room, click a person to open the session. Without WebGL the office is hidden and the page starts at the flow chart.
+- Below the office, a flow chart puts the hub in the middle and links each session to it, with message counts from the last 24 hours. The card list is still there as the second view.
+- The Flow tab graph is tilted 3D by default, with arcs for the edges. Drag or use the arrow keys to turn it, or switch back to the flat view.
+- At 1000px or wider the tabs move to a sidebar, and the usage meters become rings at its foot.
+- New colours: near-black surfaces in steps with one orange accent (#E2560B). The state "입력 필요" (needs input) is now "대기 중" (waiting) and is orange in both themes. Card outlines are gone.
+- `#/demo` adds buttons that change a session's scene in your browser only, to try the scenes. Nothing is sent to the sessions.
+
+### Added
+
+- three.js r128 (`dashboard/vendor/three.min.js`, `OrbitControls.js`, MIT, `dashboard/vendor/three-LICENSE`), bundled so the page still needs no CDN.
+- README section [Updating](https://github.com/holiday0726/lanekeeper/blob/main/README.md#updating) ([한국어](https://github.com/holiday0726/lanekeeper/blob/main/README.ko.md#업데이트)): the two update commands, turning on auto-update under `/plugin` → Marketplaces, stopping the old dashboard, and what an update leaves alone (hub folder, settings, logs).
+- The dashboard server sends its plugin version in an `X-Lanekeeper-Version` header. When a hub session opens and the running server is from another version, the session start message says to stop it and open the session again. It checks only the local server and never goes online.
+- New screenshots and a short demo GIF in both READMEs, taken with sample data.
+
 ## 0.4.1
 
 ### Changed

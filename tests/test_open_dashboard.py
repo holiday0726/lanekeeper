@@ -92,6 +92,26 @@ try:
         f.write('@echo {"ok": false}\n')
     msg = json.loads(hook(hub, CLAUDE_PLUGIN_OPTION_ORCA=None, PATH=fake + os.pathsep + bare)[0])['systemMessage']
     assert 'Orca 탭 열기 실패' in msg and 'SSH' not in msg and msg.endswith(HINT), msg
+
+    # 업데이트 전에 띄운 서버(0.4.1 이하는 판 머리글이 없다)가 포트를 쥐고 있으면 다시 띄우지 않고 끄라고 알린다
+    with socket.socket() as s:
+        s.bind(('127.0.0.1', 0))
+        port2 = s.getsockname()[1]
+    old = subprocess.Popen([sys.executable, '-m', 'http.server', str(port2), '--bind', '127.0.0.1', '--directory', tmp],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        for _ in range(40):
+            try:
+                opener.open('http://127.0.0.1:%d/' % port2, timeout=1).close()
+                break
+            except OSError:
+                time.sleep(0.1)
+        msg = json.loads(hook(hub, CLAUDE_PLUGIN_OPTION_DASHBOARD_PORT=str(port2))[0])['systemMessage']
+        assert '떠 있음, 다만 플러그인' in msg and '다른 판(0.4.1 이하)' in msg and msg.endswith(HINT), msg
+        assert not os.path.exists(os.path.join(data, 'dashboard-%d.log' % port2)), '떠 있는 포트에 서버를 또 띄웠음'
+    finally:
+        old.terminate()
+        old.wait()
 finally:
     if pid:
         os.kill(pid, signal.SIGTERM)

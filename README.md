@@ -4,7 +4,10 @@ English | [한국어](README.ko.md)
 
 A plugin that makes one Claude Code session the hub. The hub splits work across other sessions, hands it out, receives their reports and keeps the record. It ships with rule document templates for the hub, a local dashboard that shows what the sessions are doing, and hooks that protect the hub folder.
 
-<img alt="Dashboard demo: an assignment shows up in the Flow tab, a report comes back, the Status tab is updated, and user decisions collect in the Decisions tab" src="docs/images/demo.gif" width="800">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/dashboard-dark.png">
+  <img alt="Dashboard Agents tab: a sidebar with the tabs and usage rings on the left, an isometric 3D office at the top where each session has a desk and the hub has its own seat, and below it a flow chart of the sessions around the hub" src="docs/images/dashboard-light.png" width="800">
+</picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.png">
@@ -85,7 +88,29 @@ To view it from a browser on another PC, see [Viewing from another PC](#viewing-
 In the hub session, type `/rename hub`.
 Then fill in the `<...>` spots as in steps 1, 2 and 5 of [Set up the hub folder](#set-up-the-hub-folder).
 
-To get a new version, run `claude plugin marketplace update lanekeeper` and `claude plugin update lanekeeper@lanekeeper`, then open the session again.
+To get a new version, see [Updating](#updating).
+
+## Updating
+
+Claude Code does not update this marketplace by itself. Background auto-update is on by default only for Anthropic's own marketplaces, so get a new version in a terminal.
+
+```sh
+claude plugin marketplace update lanekeeper
+claude plugin update lanekeeper@lanekeeper
+```
+
+The new version loads when you start Claude Code again, or after `/reload-plugins` in a session that is already open.
+To let Claude Code do this in the background, open `/plugin` in a session, go to **Marketplaces**, select `lanekeeper` and choose **Enable auto-update**. It then checks within ten minutes after your first message in a session and shows a `Plugin updated: … · Run /reload-plugins to apply` line.
+
+A dashboard that is already running keeps showing the old version, because the hook only starts a server when none is running. Stop it with the pid on the first line of its log (see [Dashboard](#dashboard)), then open the hub session again. From 0.5.0 the session start message says so when the running server is from another version. That message points to the Korean heading of this section, "업데이트".
+
+An update replaces only the plugin's own copy under `~/.claude/plugins/cache/`. These stay as they are:
+
+- The hub folder: the rule documents and data files that `/lanekeeper:setup` copied, `.claude/settings.json` and `supervisor.settings.json`. Because setup never overwrites them, changes to `templates/hub/` in a new version do not reach an existing hub folder. When the [CHANGELOG](CHANGELOG.md) mentions a template change, compare your files with `templates/hub/` yourself.
+- Your user settings (`~/.claude/settings.json`) and the plugin settings (`python`, `hub_dir` and the rest), which are stored under the plugin name.
+- The dashboard logs in `~/.claude/plugins/data/lanekeeper-lanekeeper/`.
+
+If you installed from a cloned folder ([Manual install](#manual-install)), run `git pull` in that folder instead.
 
 ## Moving from the old name
 
@@ -233,24 +258,24 @@ After copying, fill them in for your project. A plugin cannot set permissions or
 
 Every few seconds it reads `agents.json`, `decisions.json`, `STATUS.md` and `dev-occupancy.json` in the hub folder, plus the session records under `~/.claude`, and shows them. It only reads. It does not send input to sessions or stop them.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/dashboard-dark.png">
-  <img alt="Dashboard Agents tab: usage and dev occupancy bars at the top, cards for running sessions and sessions waiting for input below" src="docs/images/dashboard-light.png" width="480">
-</picture>
+<img alt="Dashboard office scene: the hub sends an assignment, an orange sheet flies from the hub's seat to a session's desk, and a working session types at its lit screen while a resting one sits in the lounge" src="docs/images/demo.gif" width="800">
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/dashboard-flow-dark.png">
-  <img alt="Dashboard Flow tab: a graph with the hub in the middle and the assignments and reports exchanged between sessions" src="docs/images/dashboard-flow-light.png" width="480">
+  <img alt="Dashboard Flow tab: a tilted 3D graph with the hub in the middle and arcs for the assignments and reports exchanged between sessions, and the message list below" src="docs/images/dashboard-flow-light.png" width="800">
 </picture>
 
 The sessions and data on screen are samples for illustration.
 
 | Tab | What it shows |
 |---|---|
-| 에이전트 (Agents) | Session cards split into running, waiting for input and finished. Click one to see its conversation and the `claude logs` view |
+| 에이전트 (Agents) | An isometric 3D office at the top. Each session has a desk: it sits and types while it works, shows an orange `!` when it waits for you, and walks to the lounge when it rests. Assignment and report sheets fly between the hub and the desks. Drag to turn the room, click a person to open that session. Below it, a flow chart of the sessions around the hub, or the card list. Click a session to see its conversation and the `claude logs` view. Without WebGL only the flow chart shows |
 | 결정 (Decisions) | Decision items from `decisions.json` and sessions waiting for user input right now |
 | 현황 (Status) | `STATUS.md` |
-| 흐름 (Flow) | `SendMessage` between sessions as a graph and a list. The prefixes `[배정]`, `[보고]` and `[알림]` tell the kinds apart |
+| 흐름 (Flow) | `SendMessage` between sessions as a graph and a list. The graph is tilted 3D by default (drag or arrow keys to turn it) and can be switched to flat. The prefixes `[배정]`, `[보고]` and `[알림]` tell the kinds apart |
 | 할 일 (To do) | To do list per session |
+
+When the window is 1000px or wider, the tabs move to a sidebar on the left and the usage rings sit at its foot.
 
 When you open a session in the hub folder, the hook starts the dashboard for you, so there is nothing else to run. To start it by hand, pass the hub folder and port as environment variables.
 
@@ -284,7 +309,7 @@ Do not bind it to `0.0.0.0` or put it behind a public tunnel service. The dashbo
 
 | Hook | When | What it does |
 |---|---|---|
-| Open dashboard (`open_dashboard.py`) | Session start (SessionStart) | Acts only when the project folder is `hub_dir` or inside it. Starts the dashboard if it is not running, and opens it in an Orca tab if `orca` is on |
+| Open dashboard (`open_dashboard.py`) | Session start (SessionStart) | Acts only when the project folder is `hub_dir` or inside it. Starts the dashboard if it is not running, and opens it in an Orca tab if `orca` is on. If the running server is from another version, it says to stop it ([Updating](#updating)) |
 | Protect hub folder (`hub_only_write.py`) | Before Edit, Write, NotebookEdit | Blocks a session opened outside the hub folder from editing files in the hub folder, and tells it to report to the hub. Windows paths with different case, backslashes or the `/c/` form count as the same path |
 | Git message check (`git-message-style.py`) | Before Bash and PowerShell commands | Blocks `git commit`, `merge`, `tag`, `revert` and `gh pr create`, `edit` when the message breaks the bullet style rules. Off by default; set `git_message_check` to `true` to turn it on. Once on, set the environment variable `CLAUDE_GIT_STYLE=off` to pause it |
 
@@ -329,6 +354,7 @@ On Windows use `py -3` in place of `python3`. The hook tests run under the same 
 MIT license ([LICENSE](LICENSE)). Bundled parts follow their own licenses.
 
 - `skills/humanizer`: [blader/humanizer](https://github.com/blader/humanizer), MIT, `skills/humanizer/LICENSE`
+- `dashboard/vendor/three.min.js`, `OrbitControls.js`: [three.js](https://github.com/mrdoob/three.js) r128 (npm 0.128.0, unchanged), MIT, `dashboard/vendor/three-LICENSE`
 - `dashboard/vendor/xterm.js`, `xterm.css`: [xterm.js](https://github.com/xtermjs/xterm.js) 5.5.0, MIT, `dashboard/vendor/xterm-LICENSE`
 - `dashboard/vendor/WantedSansVariable.woff2`: [Wanted Sans](https://github.com/wanteddev/wanted-sans) 1.0.3, SIL OFL 1.1, `dashboard/vendor/WantedSans-OFL.txt`
 
