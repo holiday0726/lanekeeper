@@ -10,8 +10,8 @@ Claude Code 세션 하나를 허브로 두고, 허브가 다른 세션들에 일
 </picture>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.png">
-  <img alt="lanekeeper 구성도: 사용자가 허브 세션에 지시하고, 허브가 슈퍼바이저와 작업 세션에 배정합니다. 허브는 허브 폴더에 기록하고 대시보드가 그 폴더를 읽습니다. 플러그인 훅 두 개가 대시보드 열기와 허브 폴더, 레인 쓰기 보호를 맡습니다." src="docs/images/architecture-light.png" width="800">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/ko/architecture-dark.png">
+  <img alt="lanekeeper 구성도: 사용자가 허브 세션에 지시하고, 허브가 슈퍼바이저와 작업 세션에 배정합니다. 허브는 허브 폴더에 기록하고 대시보드가 그 폴더를 읽습니다. 플러그인 훅 두 개가 대시보드 열기와 허브 폴더, 레인 쓰기 보호를 맡습니다." src="docs/images/ko/architecture-light.png" width="800">
 </picture>
 
 ## 무엇이 들어 있나
@@ -30,8 +30,8 @@ Claude Code 세션 하나를 허브로 두고, 허브가 다른 세션들에 일
 사용자는 허브에게만 말합니다. 허브는 작업 세션을 띄워 `[배정]` 메시지를 보내고, 작업 세션은 일을 마치면 `[보고]` 를 보냅니다. 허브가 그 결과를 `STATUS.md` 에 적고 사용자 결정이 필요한 것은 `decisions.json` 에 모으면, 사용자는 대시보드에서 한 번에 확인합니다.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/flow-dark.png">
-  <img alt="배정에서 보고까지의 순서도: 사용자가 허브에 일을 맡기고, 허브가 세션을 등록하고 띄운 뒤 배정을 보냅니다. 작업 세션이 보고하면 허브가 STATUS.md 에 반영하고, 대시보드가 허브 폴더를 읽어 사용자에게 보여 줍니다." src="docs/images/flow-light.png" width="800">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/ko/flow-dark.png">
+  <img alt="배정에서 보고까지의 순서도: 사용자가 허브에 일을 맡기고, 허브가 세션을 등록하고 띄운 뒤 배정을 보냅니다. 작업 세션은 worktree 에서 커밋하고, 레인 쓰기 보호 훅이 다른 레인 경로 쓰기를 막습니다. 작업 세션이 보고하면 허브가 STATUS.md 에 반영하고, 대시보드가 허브 폴더를 읽어 사용자에게 보여 줍니다." src="docs/images/ko/flow-light.png" width="800">
 </picture>
 
 ## 빠른 시작
@@ -247,7 +247,7 @@ $env:HUB_DIR = "C:\Users\<나>\hub"; $env:PORT = "4990"; py -3 C:\Users\<나>\la
 ```
 .claude-plugin/   plugin.json, marketplace.json
 dashboard/        server.py, index.html, app.css, js/, test_server.py, vendor/
-docs/             README 그림(images/)과 그림 원본(diagrams/)
+docs/             README 그림(images/en, images/ko)과 그림 원본(diagrams/en, diagrams/ko)
 examples/         hub.settings.json, supervisor.settings.json, user.settings.json
 hooks/            hooks.json, open_dashboard.py, lane_guard.py, hubpath.py
 scripts/          setup_hub.py, lane_deny.py
@@ -274,4 +274,4 @@ MIT 라이선스입니다([LICENSE](LICENSE)). 함께 넣은 것은 각자의 �
 - `dashboard/vendor/xterm.js`, `xterm.css`: [xterm.js](https://github.com/xtermjs/xterm.js) 5.5.0, MIT, `dashboard/vendor/xterm-LICENSE`
 - `dashboard/vendor/WantedSansVariable.woff2`: [Wanted Sans](https://github.com/wanteddev/wanted-sans) 1.0.3, SIL OFL 1.1, `dashboard/vendor/WantedSans-OFL.txt`
 
-README 의 구성도는 diagram-design, 순서도는 [Archify](https://github.com/tt-a1i/archify) 로 그렸고 원본은 `docs/diagrams/` 에 있습니다.
+README 의 구성도와 순서도는 diagram-design 으로 그렸고, 언어별 원본은 `docs/diagrams/ko/` 와 `docs/diagrams/en/` 에 있습니다.

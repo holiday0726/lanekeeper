@@ -10,11 +10,11 @@ A plugin that makes one Claude Code session the hub. The hub splits work across 
 </picture>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.png">
-  <img alt="lanekeeper architecture: the user instructs the hub session, the hub assigns work to a supervisor and task sessions, the hub writes to the hub folder and the dashboard reads that folder. Two plugin hooks open the dashboard and keep sessions out of the hub folder and other lanes." src="docs/images/architecture-light.png" width="800">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/en/architecture-dark.png">
+  <img alt="lanekeeper architecture: the user instructs the hub session, the hub assigns work to a supervisor and task sessions, the hub writes to the hub folder and the dashboard reads that folder. Two plugin hooks open the dashboard and keep sessions out of the hub folder and other lanes." src="docs/images/en/architecture-light.png" width="800">
 </picture>
 
-The diagrams and the dashboard screenshots use Korean labels.
+The dashboard is in Korean, so its screenshots have Korean labels.
 
 ## What is in it
 
@@ -32,8 +32,8 @@ The diagrams and the dashboard screenshots use Korean labels.
 The user talks only to the hub. The hub starts a task session and sends it an `[배정]` (assignment) message. When the task session is done it sends back a `[보고]` (report). The hub writes the result to `STATUS.md` and collects anything that needs a user decision in `decisions.json`, so the user can check it all at once on the dashboard.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/flow-dark.png">
-  <img alt="Sequence from assignment to report: the user gives the hub a job, the hub registers and starts a session and sends the assignment. When the task session reports, the hub updates STATUS.md and the dashboard reads the hub folder and shows it to the user." src="docs/images/flow-light.png" width="800">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/en/flow-dark.png">
+  <img alt="Sequence from assignment to report: the user gives the hub a job, the hub registers and starts a session and sends the assignment. The task session commits in a worktree, and the lane write guard hook blocks its writes to other lanes. When it reports, the hub updates STATUS.md and the dashboard reads the hub folder and shows it to the user." src="docs/images/en/flow-light.png" width="800">
 </picture>
 
 ## Quick start
@@ -251,7 +251,7 @@ Do not bind it to `0.0.0.0` or put it behind a public tunnel service. Anyone who
 ```
 .claude-plugin/   plugin.json, marketplace.json
 dashboard/        server.py, index.html, app.css, js/, test_server.py, vendor/
-docs/             README images (images/) and their sources (diagrams/)
+docs/             README images (images/en, images/ko) and their sources (diagrams/en, diagrams/ko)
 examples/         hub.settings.json, supervisor.settings.json, user.settings.json
 hooks/            hooks.json, open_dashboard.py, lane_guard.py, hubpath.py
 scripts/          setup_hub.py, lane_deny.py
@@ -278,4 +278,4 @@ MIT license ([LICENSE](LICENSE)). Bundled parts follow their own licenses.
 - `dashboard/vendor/xterm.js`, `xterm.css`: [xterm.js](https://github.com/xtermjs/xterm.js) 5.5.0, MIT, `dashboard/vendor/xterm-LICENSE`
 - `dashboard/vendor/WantedSansVariable.woff2`: [Wanted Sans](https://github.com/wanteddev/wanted-sans) 1.0.3, SIL OFL 1.1, `dashboard/vendor/WantedSans-OFL.txt`
 
-The architecture diagram was drawn with diagram-design and the sequence diagram with [Archify](https://github.com/tt-a1i/archify). Sources are in `docs/diagrams/`.
+Both README diagrams were drawn with diagram-design. The sources for each language are in `docs/diagrams/en/` and `docs/diagrams/ko/`.
