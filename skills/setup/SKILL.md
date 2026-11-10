@@ -101,7 +101,7 @@ PowerShell:
 ```
 
 `Configuration saved` 가 보이면 된 것이다.
-`dashboard_port`, `orca`, `git_message_check` 는 넣지 않는다.
+`dashboard_port`, `orca`, `lane_message_hub_only` 는 넣지 않는다.
 비워 두면 기본값(4990, 켬, 꺼짐)을 쓴다.
 
 ## 5. addy-skills 설치(선택)

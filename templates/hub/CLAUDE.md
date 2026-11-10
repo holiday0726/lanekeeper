@@ -95,7 +95,7 @@ addy-skills 플러그인이 설치돼 있을 때만 이 절을 따른다. 설치
 - 사용자 결정이 필요한 것은 `decisions.json` 에 모은다. 대시보드 결정 탭이 읽는다.
 - 보고에 "결정 필요" 가 오면 `open` 으로 더하고, 미루기로 하면 `waiting` 과 `until`, 정해지면 `decided` 와 `decision`, `decided_at` 을 채운다. 지우지 않는다.
 - 일회성 세션의 결정은 세션을 닫기 전에 여기로 옮긴다. `STATUS.md` 에는 결정 목록을 다시 쓰지 않는다.
-- title, detail, options, decision 은 humanizer 스킬 기준으로 짧고 명료하게 쓴다.
+- title, detail, options, decision 은 짧고 명료하게 쓴다. addy-skills 가 있으면 `addy-skills:humanizer` 기준을 따른다.
 
 ## STATUS.md 갱신
 
@@ -109,4 +109,4 @@ addy-skills 플러그인이 설치돼 있을 때만 이 절을 따른다. 설치
   4. 요약 대신 근거 원본의 경로를 적는다.
 - "핵심" 절에 지금 꼭 알아야 할 것을 먼저 둔다.
 - 지난 기록이 길어지면 `reports/status-archive/` 로 옮기고 맨 위에 링크만 남긴다.
-- 고칠 때마다 humanizer 스킬을 쓰고, MD 문법(절 제목, 표, 짧은 목록, 링크)으로 읽기 좋게 쓴다.
+- 고칠 때마다 `addy-skills:humanizer` 스킬(있으면)을 쓰고, MD 문법(절 제목, 표, 짧은 목록, 링크)으로 읽기 좋게 쓴다.

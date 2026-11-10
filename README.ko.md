@@ -21,7 +21,7 @@ Claude Code 세션 하나를 허브로 두고, 허브가 다른 세션들에 일
 | 허브 규칙 틀 | `templates/hub/` | 허브의 역할과 스킬 쓰는 때(`CLAUDE.md`), 세션 사이 약속과 보고 형식(`COORDINATION.md`), 현황판(`STATUS.md`)과 빈 데이터 파일 셋 |
 | 대시보드 | `dashboard/` | 떠 있는 세션, 사용자 결정, 현황, 세션 사이 메시지를 보여 주는 읽기 전용 웹 화면. Python 표준 라이브러리만 씁니다 |
 | 훅 | `hooks/` | 허브 폴더에서 세션을 열면 대시보드를 띄우고, 다른 세션이 허브 폴더를 고치지 못하게 막고, 설정으로 켜면 git 커밋 문구를 검사합니다 |
-| 스킬 | `skills/` | 설치 마무리 `setup`, 글을 사람이 쓴 것처럼 다듬는 `humanizer`, 커밋 문구 규칙 `git-message` |
+| 스킬 | `skills/` | 설치 마무리 `setup` |
 | 설치 스크립트 | `scripts/` | `setup` 스킬이 부르는 `setup_hub.py`. 허브 폴더 복사와 설정 합치기를 맡습니다 |
 | 설정 예시 | `examples/` | 허브와 슈퍼바이저 세션의 권한, 기본 모델 같은 설정 견본 |
 
@@ -174,7 +174,7 @@ claude plugin install lanekeeper@lanekeeper --config python=python3 --config hub
 ### 함께 쓰는 플러그인 (선택)
 
 허브 규칙 틀의 `CLAUDE.md` "스킬 쓰는 때" 절은 [Addy-skills](https://github.com/holiday0726/Addy-skills) 플러그인의 스킬을 부릅니다.
-배정과 보고를 감독하는 스킬 일곱 개(`addy-skills:agent-oversight` 와 그 아래 스킬)입니다.
+배정과 보고를 감독하는 스킬 일곱 개(`addy-skills:agent-oversight` 와 그 아래 스킬)와, 글을 다듬는 `humanizer`, 커밋 문구 규칙 `git-message`(선택으로 켜는 git 문구 검사 훅 포함)가 있습니다. 뒤의 둘은 0.5.1 까지 lanekeeper 에 있었습니다.
 `STATUS.md` 의 네 원칙과 `COORDINATION.md` 의 보고 형식도 이 스킬을 따릅니다.
 설치는 선택입니다. 설치하지 않으면 허브가 그 절을 건너뜁니다.
 
@@ -188,12 +188,12 @@ Claude Code 세션 안에서는 이렇게 입력합니다.
 /plugin install addy-skills --marketplace holiday0726/Addy-skills
 ```
 
-`claude plugin details addy-skills@addy-skills` 에 스킬 일곱 개가 보이면 설치된 것입니다.
+`claude plugin details addy-skills@addy-skills` 에 스킬 아홉 개가 보이면 설치된 것입니다.
 
 ### 설치 확인과 갱신
 
 ```sh
-claude plugin details lanekeeper@lanekeeper    # Skills (3), Hooks (2) 가 보이면 설치된 것
+claude plugin details lanekeeper@lanekeeper    # Skills (1), Hooks (2) 가 보이면 설치된 것
 ```
 
 플러그인은 받은 폴더를 그대로 읽습니다. 설치한 뒤에는 그 폴더를 옮기거나 지우지 마세요. 새 판을 받을 때는 그 폴더에서 `git pull` 한 뒤 세션을 다시 열거나 세션 안에서 `/reload-plugins` 를 입력합니다.
@@ -216,7 +216,6 @@ git archive --format=zip -o ../lanekeeper.zip main    # 받는 쪽: 압축을 �
 | `hub_dir` | 예 | 허브 폴더의 절대 경로. Windows 는 `C:/Users/<나>/hub` 처럼 `/` 로 씁니다 | 없음 |
 | `dashboard_port` | 아니오 | 대시보드 포트. 주소는 늘 `127.0.0.1` 입니다 | `4990` |
 | `orca` | 아니오 | 허브 세션을 열 때 Orca 브라우저 탭으로 대시보드를 열지 | 켬(`orca` 명령이 있을 때만) |
-| `git_message_check` | 아니오 | git 문구 검사 훅을 켤지. 켜려면 `claude plugin install` 에 `--config git_message_check=true` 를 더하거나 `claude plugin configure lanekeeper@lanekeeper` 로 `true` 를 넣습니다 | 끔 |
 
 ## 허브 폴더 만들기
 
@@ -308,15 +307,12 @@ $env:HUB_DIR = "C:\Users\<나>\hub"; $env:PORT = "4990"; py -3 C:\Users\<나>\la
 |---|---|---|
 | 대시보드 열기 (`open_dashboard.py`) | 세션 시작(SessionStart) | 프로젝트 폴더가 `hub_dir` 이거나 그 아래일 때만 동작합니다. 대시보드가 꺼져 있으면 띄우고, `orca` 가 켜져 있으면 Orca 탭으로 엽니다. 떠 있는 서버가 다른 판이면 끄라고 알립니다([업데이트](#업데이트)) |
 | 레인 쓰기 보호 (`lane_guard.py`) | Edit, Write, NotebookEdit, Bash, SendMessage 직전 | 허브 폴더는 허브, 허브 `agents.json` 의 `lanes` 에 적은 경로는 그 레인의 것입니다. 세션은 연 폴더로 레인이 정해지고(`<저장소>/.claude/worktrees/` 아래 worktree 는 그 저장소 레인) 자기 레인에만 씁니다. 다른 곳에 쓰려 하면 막고 허브에 요청하라고 알립니다. Windows 경로는 대소문자와 역슬래시, `/c/` 꼴을 같은 경로로 봅니다. Bash 는 리다이렉트(`>`, `>>`), `tee`, `sed -i`, `cp`, `mv` 만 최선으로 봅니다. 변수, 스크립트, 다른 명령은 지나가니 실수를 막는 장치이지 보안 경계가 아닙니다. 설정 `lane_message_hub_only` 를 켜면 워커는 허브에게만 `SendMessage` 합니다 |
-| git 문구 검사 (`git-message-style.py`) | Bash, PowerShell 명령 직전 | `git commit`, `merge`, `tag`, `revert` 와 `gh pr create`, `edit` 문구가 개조식 규칙을 어기면 막습니다. 기본은 꺼짐이고 설정값 `git_message_check` 를 `true` 로 넣으면 켜집니다. 켠 뒤 잠시 끄려면 환경변수 `CLAUDE_GIT_STYLE=off` |
 
 ## 스킬
 
 | 스킬 | 부르는 법 | 쓰임 |
 |---|---|---|
 | setup | `/lanekeeper:setup [허브 폴더]` | 설치를 마무리합니다. 허브 폴더를 만들고 사용자 설정과 플러그인 설정값을 채웁니다. [빠른 시작](#빠른-시작) 참고 |
-| humanizer | `/lanekeeper:humanizer` | AI 가 쓴 티가 나는 문장을 고칩니다. 허브의 `STATUS.md` 와 결정 문구를 다듬을 때 씁니다 |
-| git-message | `/lanekeeper:git-message` | 커밋, 머지, PR 문구를 개조식으로 쓰는 규칙. git 문구 검사 훅이 막았을 때 같이 봅니다 |
 
 ## 저장소 구조
 
@@ -325,9 +321,9 @@ $env:HUB_DIR = "C:\Users\<나>\hub"; $env:PORT = "4990"; py -3 C:\Users\<나>\la
 dashboard/        server.py, index.html, test_server.py, vendor/
 docs/             README 그림(images/)과 그림 원본(diagrams/)
 examples/         hub.settings.json, supervisor.settings.json, user.settings.json
-hooks/            hooks.json, open_dashboard.py, hub_only_write.py, git-message-style.py, hubpath.py
-scripts/          setup_hub.py
-skills/           setup/, humanizer/, git-message/
+hooks/            hooks.json, open_dashboard.py, lane_guard.py, hubpath.py
+scripts/          setup_hub.py, lane_deny.py
+skills/           setup/
 templates/hub/    CLAUDE.md, COORDINATION.md, STATUS.md, agents.json, decisions.json, dev-occupancy.json
 tests/            훅과 설치 스크립트 시험
 ```
@@ -336,9 +332,7 @@ tests/            훅과 설치 스크립트 시험
 
 ```sh
 python3 dashboard/test_server.py        # 대시보드 서버
-python3 tests/test_hub_only_write.py    # 허브 폴더 보호, Windows 경로 꼴 포함
-python3 tests/test_style_basic.py       # git 문구 기본 규칙과 켜기 설정
-python3 tests/test_style_multi.py       # 한 명령에 git 명령이 여럿일 때
+python3 -m pytest tests/test_lane_guard.py    # 레인 쓰기 보호, Windows 경로 꼴 포함
 python3 tests/test_open_dashboard.py    # 대시보드 열기 훅, 빈 포트에 서버를 띄웠다가 끕니다
 python3 tests/test_setup_hub.py         # 설치 스크립트, 임시 폴더와 가짜 HOME 으로만 돕니다
 claude plugin validate --strict .       # 매니페스트 검사
@@ -350,7 +344,6 @@ Windows 에서는 `python3` 자리에 `py -3` 을 씁니다. 훅 시험은 Windo
 
 MIT 라이선스입니다([LICENSE](LICENSE)). 함께 넣은 것은 각자의 라이선스를 따릅니다.
 
-- `skills/humanizer`: [blader/humanizer](https://github.com/blader/humanizer), MIT, `skills/humanizer/LICENSE`
 - `dashboard/vendor/three.min.js`, `OrbitControls.js`: [three.js](https://github.com/mrdoob/three.js) r128(npm 0.128.0, 고치지 않음), MIT, `dashboard/vendor/three-LICENSE`
 - `dashboard/vendor/xterm.js`, `xterm.css`: [xterm.js](https://github.com/xtermjs/xterm.js) 5.5.0, MIT, `dashboard/vendor/xterm-LICENSE`
 - `dashboard/vendor/WantedSansVariable.woff2`: [Wanted Sans](https://github.com/wanteddev/wanted-sans) 1.0.3, SIL OFL 1.1, `dashboard/vendor/WantedSans-OFL.txt`

@@ -23,7 +23,7 @@ The diagrams and the dashboard screenshots use Korean labels.
 | Hub rule templates | `templates/hub/` | The hub role and when to use which skill (`CLAUDE.md`), agreements between sessions and the report format (`COORDINATION.md`), a status board (`STATUS.md`) and three empty data files |
 | Dashboard | `dashboard/` | A web page that only reads. It shows running sessions, user decisions, status and messages between sessions. It uses only the Python standard library |
 | Hooks | `hooks/` | Start the dashboard when a session opens in the hub folder, stop other sessions from editing the hub folder, and check git commit messages when you turn that on |
-| Skills | `skills/` | `setup` to finish the install, `humanizer` to make text read like a person wrote it, `git-message` with the commit message rules |
+| Skill | `skills/` | `setup` to finish the install |
 | Install script | `scripts/` | `setup_hub.py`, called by the `setup` skill. It copies the hub folder and merges settings |
 | Settings examples | `examples/` | Sample settings for the hub and supervisor sessions, such as permissions and the default model |
 
@@ -178,7 +178,7 @@ claude plugin install lanekeeper@lanekeeper --config python=python3 --config hub
 ### Plugin to use with it (optional)
 
 The "스킬 쓰는 때" (when to use skills) section of the hub template `CLAUDE.md` calls skills from the [Addy-skills](https://github.com/holiday0726/Addy-skills) plugin.
-These are seven skills that oversee assignments and reports (`addy-skills:agent-oversight` and the skills under it).
+These are seven skills that oversee assignments and reports (`addy-skills:agent-oversight` and the skills under it), plus `humanizer` for prose and `git-message` with an optional git message check hook. These two lived in lanekeeper until 0.5.1.
 The four principles in `STATUS.md` and the report format in `COORDINATION.md` also follow these skills.
 Installing it is optional. Without it, the hub skips that section.
 
@@ -192,12 +192,12 @@ Inside a Claude Code session, type this.
 /plugin install addy-skills --marketplace holiday0726/Addy-skills
 ```
 
-If `claude plugin details addy-skills@addy-skills` lists seven skills, it is installed.
+If `claude plugin details addy-skills@addy-skills` lists nine skills, it is installed.
 
 ### Check the install and update
 
 ```sh
-claude plugin details lanekeeper@lanekeeper    # installed if it shows Skills (3), Hooks (2)
+claude plugin details lanekeeper@lanekeeper    # installed if it shows Skills (1), Hooks (2)
 ```
 
 The plugin reads the cloned folder in place. Do not move or delete that folder after installing. To get a new version, run `git pull` in that folder and open the session again, or type `/reload-plugins` in the session.
@@ -220,7 +220,6 @@ Pass them with `--config key=value` when installing, and change them later with 
 | `hub_dir` | Yes | Absolute path to the hub folder. On Windows write it with `/`, as in `C:/Users/<you>/hub` | none |
 | `dashboard_port` | No | Dashboard port. The address is always `127.0.0.1` | `4990` |
 | `orca` | No | Whether to open the dashboard in an Orca browser tab when the hub session opens | on (only if the `orca` command exists) |
-| `git_message_check` | No | Whether to turn on the git message check hook. To turn it on, add `--config git_message_check=true` to `claude plugin install`, or set `true` with `claude plugin configure lanekeeper@lanekeeper` | off |
 
 ## Set up the hub folder
 
@@ -312,15 +311,12 @@ Do not bind it to `0.0.0.0` or put it behind a public tunnel service. The dashbo
 |---|---|---|
 | Open dashboard (`open_dashboard.py`) | Session start (SessionStart) | Acts only when the project folder is `hub_dir` or inside it. Starts the dashboard if it is not running, and opens it in an Orca tab if `orca` is on. If the running server is from another version, it says to stop it ([Updating](#updating)) |
 | Lane write guard (`lane_guard.py`) | Before Edit, Write, NotebookEdit, Bash, SendMessage | The hub folder belongs to the hub, and each path under `lanes` in the hub's `agents.json` belongs to that lane. A session may write only to its own lane, decided by the folder it was opened in (a worktree under `<repo>/.claude/worktrees/` counts as the repository). Other writes are blocked with a message to ask the hub. Windows paths with different case, backslashes or the `/c/` form count as the same path. Bash is checked on a best effort basis only: redirects (`>`, `>>`), `tee`, `sed -i`, `cp`, `mv`. Variables, scripts and other commands get through, so this catches mistakes and is not a security boundary. With `lane_message_hub_only` on, workers may `SendMessage` only to the hub |
-| Git message check (`git-message-style.py`) | Before Bash and PowerShell commands | Blocks `git commit`, `merge`, `tag`, `revert` and `gh pr create`, `edit` when the message breaks the bullet style rules. Off by default; set `git_message_check` to `true` to turn it on. Once on, set the environment variable `CLAUDE_GIT_STYLE=off` to pause it |
 
 ## Skills
 
 | Skill | How to call | Use |
 |---|---|---|
 | setup | `/lanekeeper:setup [hub folder]` | Finishes the install. Creates the hub folder and fills in user settings and plugin settings. See [Quick start](#quick-start) |
-| humanizer | `/lanekeeper:humanizer` | Fixes text that reads as written by AI. Used to polish the hub's `STATUS.md` and decision text |
-| git-message | `/lanekeeper:git-message` | Rules for writing commit, merge and PR messages as bullets. Read it together with the git message check hook when the hook blocks you |
 
 ## Repository layout
 
@@ -329,9 +325,9 @@ Do not bind it to `0.0.0.0` or put it behind a public tunnel service. The dashbo
 dashboard/        server.py, index.html, test_server.py, vendor/
 docs/             README images (images/) and their sources (diagrams/)
 examples/         hub.settings.json, supervisor.settings.json, user.settings.json
-hooks/            hooks.json, open_dashboard.py, hub_only_write.py, git-message-style.py, hubpath.py
-scripts/          setup_hub.py
-skills/           setup/, humanizer/, git-message/
+hooks/            hooks.json, open_dashboard.py, lane_guard.py, hubpath.py
+scripts/          setup_hub.py, lane_deny.py
+skills/           setup/
 templates/hub/    CLAUDE.md, COORDINATION.md, STATUS.md, agents.json, decisions.json, dev-occupancy.json
 tests/            tests for the hooks and the install script
 ```
@@ -340,9 +336,7 @@ tests/            tests for the hooks and the install script
 
 ```sh
 python3 dashboard/test_server.py        # dashboard server
-python3 tests/test_hub_only_write.py    # hub folder protection, including Windows path forms
-python3 tests/test_style_basic.py       # git message basic rules and the on/off setting
-python3 tests/test_style_multi.py       # several git commands in one call
+python3 -m pytest tests/test_lane_guard.py    # lane write guard, including Windows path forms
 python3 tests/test_open_dashboard.py    # open dashboard hook, starts a server on a free port and stops it
 python3 tests/test_setup_hub.py         # install script, runs only on temp folders and a fake HOME
 claude plugin validate --strict .       # manifest check
@@ -354,7 +348,6 @@ On Windows use `py -3` in place of `python3`. The hook tests run under the same 
 
 MIT license ([LICENSE](LICENSE)). Bundled parts follow their own licenses.
 
-- `skills/humanizer`: [blader/humanizer](https://github.com/blader/humanizer), MIT, `skills/humanizer/LICENSE`
 - `dashboard/vendor/three.min.js`, `OrbitControls.js`: [three.js](https://github.com/mrdoob/three.js) r128 (npm 0.128.0, unchanged), MIT, `dashboard/vendor/three-LICENSE`
 - `dashboard/vendor/xterm.js`, `xterm.css`: [xterm.js](https://github.com/xtermjs/xterm.js) 5.5.0, MIT, `dashboard/vendor/xterm-LICENSE`
 - `dashboard/vendor/WantedSansVariable.woff2`: [Wanted Sans](https://github.com/wanteddev/wanted-sans) 1.0.3, SIL OFL 1.1, `dashboard/vendor/WantedSans-OFL.txt`
