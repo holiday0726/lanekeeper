@@ -2,16 +2,16 @@
 
 English | [한국어](README.ko.md)
 
-A plugin that makes one Claude Code session the hub. The hub splits work across other sessions, hands it out, receives their reports and keeps the record. It ships with rule document templates for the hub, a local dashboard that shows what the sessions are doing, and hooks that protect the hub folder.
+A plugin that makes one Claude Code session the hub. The hub splits work across other sessions, hands it out, receives their reports and keeps the record. It ships with rule document templates for the hub, a local dashboard that shows what the sessions are doing, and a hook that keeps each session to its own lane.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/dashboard-dark.png">
-  <img alt="Dashboard Agents tab: a sidebar with the tabs and usage rings on the left, an isometric 3D office at the top where each session has a desk and the hub has its own seat, and below it a flow chart of the sessions around the hub" src="docs/images/dashboard-light.png" width="800">
+  <img alt="Dashboard Agents tab: a sidebar with the tabs and usage rings on the left, the optional 3D office turned on at the top, where each session has a desk and the hub has its own seat, and below it a flow chart of the sessions around the hub" src="docs/images/dashboard-light.png" width="800">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.png">
-  <img alt="lanekeeper architecture: the user instructs the hub session, the hub assigns work to a supervisor and task sessions, the hub writes to the hub folder and the dashboard reads that folder. Three plugin hooks protect the hub folder, open the dashboard and check git messages." src="docs/images/architecture-light.png" width="800">
+  <img alt="lanekeeper architecture: the user instructs the hub session, the hub assigns work to a supervisor and task sessions, the hub writes to the hub folder and the dashboard reads that folder. Two plugin hooks open the dashboard and keep sessions out of the hub folder and other lanes." src="docs/images/architecture-light.png" width="800">
 </picture>
 
 The diagrams and the dashboard screenshots use Korean labels.
@@ -22,7 +22,7 @@ The diagrams and the dashboard screenshots use Korean labels.
 |---|---|---|
 | Hub rule templates | `templates/hub/` | The hub role and when to use which skill (`CLAUDE.md`), agreements between sessions and the report format (`COORDINATION.md`), a status board (`STATUS.md`) and three empty data files |
 | Dashboard | `dashboard/` | A web page that only reads. It shows running sessions, user decisions, status and messages between sessions. It uses only the Python standard library |
-| Hooks | `hooks/` | Start the dashboard when a session opens in the hub folder, stop other sessions from editing the hub folder, and check git commit messages when you turn that on |
+| Hooks | `hooks/` | Start the dashboard when a session opens in the hub folder, and stop a session from writing to the hub folder or to another lane's paths |
 | Skill | `skills/` | `setup` to finish the install |
 | Install script | `scripts/` | `setup_hub.py`, called by the `setup` skill. It copies the hub folder and merges settings |
 | Settings examples | `examples/` | Sample settings for the hub and supervisor sessions, such as permissions and the default model |
@@ -86,7 +86,7 @@ claude
 When the session opens and shows a line starting with `대시보드 http://127.0.0.1:4990 떠 있음` (dashboard is up), open that address in a browser.
 To view it from a browser on another PC, see [Viewing from another PC](#viewing-from-another-pc). The hook message points to the Korean heading of the same section, "다른 PC 에서 보기".
 In the hub session, type `/rename hub`.
-Then fill in the `<...>` spots as in steps 1, 2 and 5 of [Set up the hub folder](#set-up-the-hub-folder).
+Then fill in the `<...>` spots as in steps 1, 2, 4, 5 and 6 of [Set up the hub folder](#set-up-the-hub-folder).
 
 To get a new version, see [Updating](#updating).
 
@@ -100,7 +100,7 @@ claude plugin update lanekeeper@lanekeeper
 ```
 
 The new version loads when you start Claude Code again, or after `/reload-plugins` in a session that is already open.
-To let Claude Code do this in the background, open `/plugin` in a session, go to **Marketplaces**, select `lanekeeper` and choose **Enable auto-update**. It then checks within ten minutes after your first message in a session and shows a `Plugin updated: … · Run /reload-plugins to apply` line.
+To let Claude Code do this in the background, open `/plugin` in a session, go to **Marketplaces**, select `lanekeeper` and choose **Enable auto-update**. It then checks within ten minutes after your first message in a session and, when it gets one, shows a line saying the plugin was updated and that `/reload-plugins` applies it.
 
 A dashboard that is already running keeps showing the old version, because the hook only starts a server when none is running. Stop it with the pid on the first line of its log (see [Dashboard](#dashboard)), then open the hub session again. From 0.5.0 the session start message says so when the running server is from another version. That message points to the Korean heading of this section, "업데이트".
 
@@ -114,112 +114,40 @@ If you installed from a cloned folder ([Manual install](#manual-install)), run `
 
 ## Moving from the old name
 
-Up to 0.3.0 the plugin and the marketplace were called `agent-hub`, and the repository was called `claude-hub-plugin`.
-Because the name changed, `claude plugin update` does not carry you over. Remove the old one and install again.
-
-1. Write down the old settings.
-   The `inputs` field in the output of `claude plugin configure agent-hub@agent-hub --json` holds values such as `python` and `hub_dir`.
-2. Remove the old plugin and marketplace.
-
-   ```sh
-   claude plugin uninstall agent-hub@agent-hub
-   claude plugin marketplace remove agent-hub
-   ```
-
-3. Install `lanekeeper` as in [Quick start](#quick-start) or [Manual install](#manual-install).
-4. Enter the settings again.
-   Settings are stored per plugin name under `pluginConfigs` in `~/.claude/settings.json`, and they are deleted together with the old plugin.
-   Call `/lanekeeper:setup <hub folder>` or use `claude plugin configure lanekeeper@lanekeeper` to enter the values from step 1.
-   The files in the hub folder stay as they are.
-5. From 0.4.0 the git message check hook is off by default.
-   To keep using it, set `git_message_check` to `true` ([Settings](#settings)).
-
-The data folder also changes from `~/.claude/plugins/data/agent-hub-agent-hub/` to `~/.claude/plugins/data/lanekeeper-lanekeeper/`.
-The old folder holds only dashboard logs, so you can delete it.
-If you cloned the repository and installed by hand, change the remote of that folder to `https://github.com/holiday0726/lanekeeper.git` (`git remote set-url origin <url>`).
-GitHub also forwards the old address to the new one.
+Up to 0.3.0 the plugin was called `agent-hub`. Remove it with `claude plugin uninstall agent-hub@agent-hub` and `claude plugin marketplace remove agent-hub`, install as in [Quick start](#quick-start), and run `/lanekeeper:setup <hub folder>` to enter the settings again. The hub folder stays as it is. Details are in the [CHANGELOG](CHANGELOG.md) under 0.4.0.
 
 ## Manual install
 
-Use this if you do not use the setup skill, or if you want to clone the repository and change it.
-
-You need Claude Code, git and Python 3.8 or later. The repository folder is itself a local marketplace, so you add the cloned folder as a marketplace and install the `lanekeeper` plugin in it.
-
-### Windows
-
-Hooks run the `python` setting directly, without a shell. So on Windows you give the absolute path to `python.exe`. Check the path in PowerShell.
-
-```powershell
-py -3 -c "import sys; print(sys.executable)"
-# without the py launcher: python -c "import sys; print(sys.executable)"
-```
-
-Change the backslashes in the printed path to `/` and use it in the install. If the path has spaces, quote it like `"python=C:/Program Files/Python312/python.exe"`.
-
-```powershell
-cd $HOME
-git clone https://github.com/holiday0726/lanekeeper.git
-claude plugin marketplace add C:/Users/<you>/lanekeeper
-claude plugin install lanekeeper@lanekeeper `
-  --config python=C:/Users/<you>/AppData/Local/Programs/Python/Python312/python.exe `
-  --config hub_dir=C:/Users/<you>/hub
-```
-
-You can also install inside a Claude Code session. Type `/plugin marketplace add C:/Users/<you>/lanekeeper` and `/plugin install lanekeeper@lanekeeper`, then fill in `python` and `hub_dir` in the `/plugin configure lanekeeper@lanekeeper` dialog.
-
-### Linux, macOS
+To change the code, clone the repository and add the folder as a local marketplace. Then run `/lanekeeper:setup` as in [Quick start](#quick-start); it fills in `python` and `hub_dir`.
 
 ```sh
 git clone https://github.com/holiday0726/lanekeeper.git ~/lanekeeper
-claude plugin marketplace add ~/lanekeeper
-claude plugin install lanekeeper@lanekeeper --config python=python3 --config hub_dir="$HOME/hub"
+claude plugin marketplace add ~/lanekeeper      # Windows: C:/Users/<you>/lanekeeper
+claude plugin install lanekeeper@lanekeeper
+claude plugin details lanekeeper@lanekeeper     # installed if it shows Skills (1), Hooks (2)
 ```
 
-### Plugin to use with it (optional)
+The plugin reads that folder in place, so do not move it. To update, run `git pull` there and type `/reload-plugins`. For a PC without internet access, carry over `git bundle create ../lanekeeper.bundle HEAD main` and clone the bundle there.
 
-The "스킬 쓰는 때" (when to use skills) section of the hub template `CLAUDE.md` calls skills from the [Addy-skills](https://github.com/holiday0726/Addy-skills) plugin.
-These are seven skills that oversee assignments and reports (`addy-skills:agent-oversight` and the skills under it), plus `humanizer` for prose and `git-message` with an optional git message check hook. These two lived in lanekeeper until 0.5.1.
-The four principles in `STATUS.md` and the report format in `COORDINATION.md` also follow these skills.
-Installing it is optional. Without it, the hub skips that section.
+## Addy-skills (optional)
+
+The "스킬 쓰는 때" (when to use skills) section of the hub template `CLAUDE.md` calls skills from the [Addy-skills](https://github.com/holiday0726/Addy-skills) plugin: seven skills that oversee assignments and reports (`addy-skills:agent-oversight` and the skills under it), `humanizer` for prose, and `git-message` with an optional git message check hook. The last two lived in lanekeeper until 0.5.1. Without the plugin the hub skips that section.
 
 ```sh
 claude plugin install addy-skills --marketplace holiday0726/Addy-skills
 ```
 
-Inside a Claude Code session, type this.
+## Settings
 
-```
-/plugin install addy-skills --marketplace holiday0726/Addy-skills
-```
-
-If `claude plugin details addy-skills@addy-skills` lists nine skills, it is installed.
-
-### Check the install and update
-
-```sh
-claude plugin details lanekeeper@lanekeeper    # installed if it shows Skills (1), Hooks (2)
-```
-
-The plugin reads the cloned folder in place. Do not move or delete that folder after installing. To get a new version, run `git pull` in that folder and open the session again, or type `/reload-plugins` in the session.
-
-For a PC without internet access, pack it somewhere else and carry it over.
-
-```sh
-cd lanekeeper
-git bundle create ../lanekeeper.bundle HEAD main      # receiving side: git clone lanekeeper.bundle lanekeeper
-git archive --format=zip -o ../lanekeeper.zip main    # receiving side: just unzip it
-```
-
-### Settings
-
-Pass them with `--config key=value` when installing, and change them later with `claude plugin configure lanekeeper@lanekeeper` or `/plugin configure lanekeeper@lanekeeper` inside a session.
+`/lanekeeper:setup` fills in the first two. Change any of them with `claude plugin configure lanekeeper@lanekeeper`, or `/plugin configure lanekeeper@lanekeeper` in a session.
 
 | Key | Required | Meaning | Default |
 |---|---|---|---|
-| `python` | Yes | Python 3 command that runs the hooks. `python3` on Linux and macOS, the absolute path to `python.exe` on Windows | none |
+| `python` | Yes | Python 3 command that runs the hooks. `python3` on Linux and macOS, the absolute path to `python.exe` with `/` on Windows (hooks run it without a shell) | none |
 | `hub_dir` | Yes | Absolute path to the hub folder. On Windows write it with `/`, as in `C:/Users/<you>/hub` | none |
 | `dashboard_port` | No | Dashboard port. The address is always `127.0.0.1` | `4990` |
 | `orca` | No | Whether to open the dashboard in an Orca browser tab when the hub session opens | on (only if the `orca` command exists) |
+| `lane_message_hub_only` | No | Whether workers may `SendMessage` only to the hub ([Hooks](#hooks)) | off |
 
 ## Set up the hub folder
 

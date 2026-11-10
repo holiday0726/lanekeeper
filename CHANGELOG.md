@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.6.0
+
+Lanes are now enforced, the writing skills moved out, tests run in CI, and the 3D office is optional.
+
+If you used `humanizer`, `git-message` or the git message check, install [Addy-skills](https://github.com/holiday0726/Addy-skills) 1.1.0 or later and turn on `git_message_check` there again (`claude plugin configure addy-skills@addy-skills`). To enforce lanes in an existing hub folder, add `"lanes"` to its `agents.json` (see `templates/hub/agents.json`). Without it only the hub folder is protected, as before.
+
+### Added
+
+- Lane write guard `hooks/lane_guard.py`, replacing `hub_only_write.py`. The hub's `agents.json` gets `"lanes": {"<lane>": ["<path>", ...]}`. The hub folder always belongs to the hub. A session's lane comes from the folder it was opened in, and a worktree under `<repo>/.claude/worktrees/` counts as that repository. Edit, Write, MultiEdit and NotebookEdit outside the session's own lane are blocked with a message to ask the hub. The deepest path wins when lanes overlap, and a session in no lane may not write to any owned path.
+- The same hook checks Bash on a best effort basis only: redirects (`>`, `>>`), `tee`, `sed -i`, `cp`, `mv`, `install` and a plain `cd`. Variables, scripts, `git` and PowerShell get through. It catches mistakes and is not a security boundary.
+- Setting `lane_message_hub_only` (default off): workers may `SendMessage` only to the hub (a name whose `lane` is `HUB` in `agents.json`) and to `main`. Replies to a `uds:` address still go through.
+- `scripts/lane_deny.py <hub folder>` prints `permissions.deny` lines (`Edit(//<path>/**)`) for the hub session from the lanes.
+- Optional dashboard token: set `LANEKEEPER_TOKEN` and the server answers only a browser that opened `/?token=<value>` once (HttpOnly cookie). It keeps other accounts on the same PC out. The session start message shows that address.
+- GitHub Actions runs the tests on Linux and Windows and `claude plugin validate --strict` on every push.
+
+### Changed
+
+- The 3D office is off by default. The Agents tab opens with the flow chart or card list, and the `3D 오피스` (3D office) button turns the office on and only then loads three.js and `js/office.js`. The choice is kept in the browser.
+- `dashboard/index.html` is split into `app.css` and ten files under `dashboard/js/` by feature.
+- All tests are pytest tests now (`python3 -m pytest -q`).
+- `/api/transcript` answers 400 instead of 500 when `from` is not an integer.
+- README: shorter "Moving from the old name" and "Manual install" sections, and "Addy-skills (optional)" and "Settings" as their own sections.
+- The architecture diagram shows two hooks.
+
+### Removed
+
+- `skills/humanizer`, `skills/git-message`, the git message check hook and the setting `git_message_check`. They are in Addy-skills 1.1.0.
+
 ## 0.5.1
 
 Updates to the hub rule templates and the humanizer skill. An update does not touch your hub folder, so copy the lines you want from `templates/hub/CLAUDE.md` and `templates/hub/COORDINATION.md` into it by hand.
@@ -33,7 +61,7 @@ A new dashboard design. Nothing to change in your settings or your hub folder. A
 ### Added
 
 - three.js r128 (`dashboard/vendor/three.min.js`, `OrbitControls.js`, MIT, `dashboard/vendor/three-LICENSE`), bundled so the page still needs no CDN.
-- README section [Updating](https://github.com/holiday0726/lanekeeper/blob/main/README.md#updating) ([한국어](https://github.com/holiday0726/lanekeeper/blob/main/README.ko.md#업데이트)): the two update commands, turning on auto-update under `/plugin` → Marketplaces, stopping the old dashboard, and what an update leaves alone (hub folder, settings, logs).
+- README section [Updating](https://github.com/holiday0726/lanekeeper/blob/main/README.md#updating) ([한국어](https://github.com/holiday0726/lanekeeper/blob/main/README.ko.md#업데이트)): the two update commands, turning on auto-update in the Marketplaces screen of `/plugin`, stopping the old dashboard, and what an update leaves alone (hub folder, settings, logs).
 - The dashboard server sends its plugin version in an `X-Lanekeeper-Version` header. When a hub session opens and the running server is from another version, the session start message says to stop it and open the session again. It checks only the local server and never goes online.
 - New screenshots and a short demo GIF in both READMEs, taken with sample data.
 

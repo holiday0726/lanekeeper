@@ -2,16 +2,16 @@
 
 [English](README.md) | 한국어
 
-Claude Code 세션 하나를 허브로 두고, 허브가 다른 세션들에 일을 나눠 맡기고 보고를 받아 기록하게 만드는 플러그인입니다. 허브가 따를 규칙 문서 틀과 세션 현황을 보는 로컬 대시보드, 허브 폴더를 지키는 훅이 함께 들어 있습니다.
+Claude Code 세션 하나를 허브로 두고, 허브가 다른 세션들에 일을 나눠 맡기고 보고를 받아 기록하게 만드는 플러그인입니다. 허브가 따를 규칙 문서 틀과 세션 현황을 보는 로컬 대시보드, 세션이 자기 레인 밖에 쓰지 못하게 막는 훅이 함께 들어 있습니다.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/dashboard-dark.png">
-  <img alt="대시보드 에이전트 탭: 왼쪽에 탭과 사용량 링이 있는 사이드바, 위에 세션마다 책상이 있고 허브는 제자리가 있는 아이소메트릭 3D 오피스, 아래에 허브를 가운데 둔 세션 흐름도" src="docs/images/dashboard-light.png" width="800">
+  <img alt="대시보드 에이전트 탭: 왼쪽에 탭과 사용량 링이 있는 사이드바, 위에 3D 오피스를 켰을 때 나오는 아이소메트릭 오피스(세션마다 책상, 허브는 제자리), 아래에 허브를 가운데 둔 세션 흐름도" src="docs/images/dashboard-light.png" width="800">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.png">
-  <img alt="lanekeeper 구성도: 사용자가 허브 세션에 지시하고, 허브가 슈퍼바이저와 작업 세션에 배정합니다. 허브는 허브 폴더에 기록하고 대시보드가 그 폴더를 읽습니다. 플러그인 훅 세 개가 허브 폴더 보호, 대시보드 열기, git 문구 검사를 맡습니다." src="docs/images/architecture-light.png" width="800">
+  <img alt="lanekeeper 구성도: 사용자가 허브 세션에 지시하고, 허브가 슈퍼바이저와 작업 세션에 배정합니다. 허브는 허브 폴더에 기록하고 대시보드가 그 폴더를 읽습니다. 플러그인 훅 두 개가 대시보드 열기와 허브 폴더, 레인 쓰기 보호를 맡습니다." src="docs/images/architecture-light.png" width="800">
 </picture>
 
 ## 무엇이 들어 있나
@@ -20,7 +20,7 @@ Claude Code 세션 하나를 허브로 두고, 허브가 다른 세션들에 일
 |---|---|---|
 | 허브 규칙 틀 | `templates/hub/` | 허브의 역할과 스킬 쓰는 때(`CLAUDE.md`), 세션 사이 약속과 보고 형식(`COORDINATION.md`), 현황판(`STATUS.md`)과 빈 데이터 파일 셋 |
 | 대시보드 | `dashboard/` | 떠 있는 세션, 사용자 결정, 현황, 세션 사이 메시지를 보여 주는 읽기 전용 웹 화면. Python 표준 라이브러리만 씁니다 |
-| 훅 | `hooks/` | 허브 폴더에서 세션을 열면 대시보드를 띄우고, 다른 세션이 허브 폴더를 고치지 못하게 막고, 설정으로 켜면 git 커밋 문구를 검사합니다 |
+| 훅 | `hooks/` | 허브 폴더에서 세션을 열면 대시보드를 띄우고, 세션이 허브 폴더나 다른 레인 경로에 쓰지 못하게 막습니다 |
 | 스킬 | `skills/` | 설치 마무리 `setup` |
 | 설치 스크립트 | `scripts/` | `setup` 스킬이 부르는 `setup_hub.py`. 허브 폴더 복사와 설정 합치기를 맡습니다 |
 | 설정 예시 | `examples/` | 허브와 슈퍼바이저 세션의 권한, 기본 모델 같은 설정 견본 |
@@ -82,7 +82,7 @@ claude
 세션이 열리면서 `대시보드 http://127.0.0.1:4990 떠 있음` 으로 시작하는 줄이 보이면 브라우저로 그 주소를 엽니다.
 다른 PC 의 브라우저로 볼 때는 [다른 PC 에서 보기](#다른-pc-에서-보기)를 따릅니다.
 허브 세션 안에서 `/rename hub` 를 입력합니다.
-그다음 [허브 폴더 만들기](#허브-폴더-만들기) 의 1, 2, 5 번대로 `<...>` 자리를 채웁니다.
+그다음 [허브 폴더 만들기](#허브-폴더-만들기) 의 1, 2, 4, 5, 6 번대로 `<...>` 자리를 채웁니다.
 
 새 판을 받는 법은 [업데이트](#업데이트)에 있습니다.
 
@@ -96,7 +96,7 @@ claude plugin update lanekeeper@lanekeeper
 ```
 
 새 판은 Claude Code 를 다시 열 때 올라옵니다. 이미 열려 있는 세션에서는 `/reload-plugins` 를 입력합니다.
-백그라운드에서 받게 하려면 세션에서 `/plugin` 을 열고 **Marketplaces** 에서 `lanekeeper` 를 골라 **Enable auto-update** 를 누릅니다. 그러면 세션에서 첫 메시지를 보낸 뒤 10분 안에 확인하고, 새 판을 받으면 `Plugin updated: … · Run /reload-plugins to apply` 줄을 보여 줍니다.
+백그라운드에서 받게 하려면 세션에서 `/plugin` 을 열고 **Marketplaces** 에서 `lanekeeper` 를 골라 **Enable auto-update** 를 누릅니다. 그러면 세션에서 첫 메시지를 보낸 뒤 10분 안에 확인하고, 새 판을 받으면 플러그인이 바뀌었으니 `/reload-plugins` 로 적용하라는 줄을 보여 줍니다.
 
 이미 떠 있는 대시보드는 옛 판 화면을 계속 보여 줍니다. 훅은 서버가 없을 때만 띄우기 때문입니다. 로그 첫 줄의 pid 로 서버를 끄고([대시보드](#대시보드) 참고) 허브 세션을 다시 엽니다. 0.5.0 부터는 떠 있는 서버가 다른 판이면 세션 시작 메시지가 그렇게 알려 줍니다.
 
@@ -110,112 +110,40 @@ claude plugin update lanekeeper@lanekeeper
 
 ## 옛 이름에서 옮기기
 
-0.3.0 까지는 플러그인과 마켓플레이스 이름이 `agent-hub`, 저장소 이름이 `claude-hub-plugin` 이었습니다.
-이름이 바뀌어 `claude plugin update` 로는 넘어오지 않으니 지우고 새로 설치합니다.
-
-1. 옛 설정값을 적어 둡니다.
-   `claude plugin configure agent-hub@agent-hub --json` 출력의 `inputs` 에 `python`, `hub_dir` 같은 값이 있습니다.
-2. 옛 플러그인과 마켓플레이스를 지웁니다.
-
-   ```sh
-   claude plugin uninstall agent-hub@agent-hub
-   claude plugin marketplace remove agent-hub
-   ```
-
-3. [빠른 시작](#빠른-시작) 이나 [손으로 설치하기](#손으로-설치하기) 대로 `lanekeeper` 를 설치합니다.
-4. 설정값을 다시 넣습니다.
-   설정값은 `~/.claude/settings.json` 의 `pluginConfigs` 에 플러그인 이름별로 저장되고, 옛 플러그인을 지우면 같이 지워집니다.
-   `/lanekeeper:setup <허브 폴더>` 를 부르거나 `claude plugin configure lanekeeper@lanekeeper` 로 1 번에서 적은 값을 넣습니다.
-   허브 폴더 안의 파일은 그대로 두고 씁니다.
-5. 0.4.0 부터 git 문구 검사 훅은 기본으로 꺼져 있습니다.
-   계속 쓰려면 `git_message_check` 에 `true` 를 넣습니다([설정값](#설정값)).
-
-데이터 폴더도 `~/.claude/plugins/data/agent-hub-agent-hub/` 에서 `~/.claude/plugins/data/lanekeeper-lanekeeper/` 로 바뀝니다.
-옛 폴더에는 대시보드 로그만 있으니 지워도 됩니다.
-저장소를 받아 손으로 설치했다면 받은 폴더의 원격 주소를 `https://github.com/holiday0726/lanekeeper.git` 로 바꿉니다(`git remote set-url origin <주소>`).
-옛 주소도 GitHub 이 새 주소로 넘겨 줍니다.
+0.3.0 까지 플러그인 이름은 `agent-hub` 였습니다. `claude plugin uninstall agent-hub@agent-hub` 와 `claude plugin marketplace remove agent-hub` 로 지우고, [빠른 시작](#빠른-시작) 대로 설치한 뒤 `/lanekeeper:setup <허브 폴더>` 로 설정값을 다시 넣습니다. 허브 폴더는 그대로 씁니다. 자세한 것은 [CHANGELOG](CHANGELOG.md) 0.4.0 에 있습니다.
 
 ## 손으로 설치하기
 
-설치 스킬을 쓰지 않거나, 저장소를 받아 고쳐 쓰려면 이렇게 합니다.
-
-Claude Code, git, Python 3.8 이상이 필요합니다. 저장소 폴더가 그대로 로컬 마켓플레이스라서 받은 폴더를 마켓플레이스로 붙이고 그 안의 `lanekeeper` 플러그인을 설치합니다.
-
-### Windows
-
-훅은 셸을 거치지 않고 설정값 `python` 을 그대로 실행합니다. 그래서 Windows 에서는 `python.exe` 의 절대 경로를 넣습니다. PowerShell 에서 경로를 확인합니다.
-
-```powershell
-py -3 -c "import sys; print(sys.executable)"
-# py 런처가 없으면: python -c "import sys; print(sys.executable)"
-```
-
-출력된 경로의 역슬래시를 `/` 로 바꿔 설치에 씁니다. 경로에 빈칸이 있으면 `"python=C:/Program Files/Python312/python.exe"` 처럼 따옴표로 묶습니다.
-
-```powershell
-cd $HOME
-git clone https://github.com/holiday0726/lanekeeper.git
-claude plugin marketplace add C:/Users/<나>/lanekeeper
-claude plugin install lanekeeper@lanekeeper `
-  --config python=C:/Users/<나>/AppData/Local/Programs/Python/Python312/python.exe `
-  --config hub_dir=C:/Users/<나>/hub
-```
-
-Claude Code 세션 안에서 설치해도 됩니다. `/plugin marketplace add C:/Users/<나>/lanekeeper`, `/plugin install lanekeeper@lanekeeper` 를 차례로 입력한 뒤 `/plugin configure lanekeeper@lanekeeper` 창에서 `python` 과 `hub_dir` 를 채웁니다.
-
-### Linux, macOS
+코드를 고쳐 쓰려면 저장소를 받아 그 폴더를 로컬 마켓플레이스로 붙입니다. 그다음 [빠른 시작](#빠른-시작) 처럼 `/lanekeeper:setup` 을 부르면 `python` 과 `hub_dir` 를 채웁니다.
 
 ```sh
 git clone https://github.com/holiday0726/lanekeeper.git ~/lanekeeper
-claude plugin marketplace add ~/lanekeeper
-claude plugin install lanekeeper@lanekeeper --config python=python3 --config hub_dir="$HOME/hub"
+claude plugin marketplace add ~/lanekeeper      # Windows: C:/Users/<나>/lanekeeper
+claude plugin install lanekeeper@lanekeeper
+claude plugin details lanekeeper@lanekeeper     # Skills (1), Hooks (2) 가 보이면 설치된 것
 ```
 
-### 함께 쓰는 플러그인 (선택)
+플러그인은 그 폴더를 그대로 읽으니 옮기지 않습니다. 새 판은 그 폴더에서 `git pull` 한 뒤 `/reload-plugins` 를 입력합니다. 인터넷이 없는 PC 에는 `git bundle create ../lanekeeper.bundle HEAD main` 으로 만든 묶음을 옮겨 clone 합니다.
 
-허브 규칙 틀의 `CLAUDE.md` "스킬 쓰는 때" 절은 [Addy-skills](https://github.com/holiday0726/Addy-skills) 플러그인의 스킬을 부릅니다.
-배정과 보고를 감독하는 스킬 일곱 개(`addy-skills:agent-oversight` 와 그 아래 스킬)와, 글을 다듬는 `humanizer`, 커밋 문구 규칙 `git-message`(선택으로 켜는 git 문구 검사 훅 포함)가 있습니다. 뒤의 둘은 0.5.1 까지 lanekeeper 에 있었습니다.
-`STATUS.md` 의 네 원칙과 `COORDINATION.md` 의 보고 형식도 이 스킬을 따릅니다.
-설치는 선택입니다. 설치하지 않으면 허브가 그 절을 건너뜁니다.
+## Addy-skills (선택)
+
+허브 규칙 틀 `CLAUDE.md` 의 "스킬 쓰는 때" 절은 [Addy-skills](https://github.com/holiday0726/Addy-skills) 플러그인의 스킬을 부릅니다. 배정과 보고를 감독하는 스킬 일곱 개(`addy-skills:agent-oversight` 와 그 아래 스킬), 글을 다듬는 `humanizer`, 커밋 문구 규칙 `git-message`(선택으로 켜는 git 문구 검사 훅 포함)입니다. 뒤의 둘은 0.5.1 까지 lanekeeper 에 있었습니다. 설치하지 않으면 허브가 그 절을 건너뜁니다.
 
 ```sh
 claude plugin install addy-skills --marketplace holiday0726/Addy-skills
 ```
 
-Claude Code 세션 안에서는 이렇게 입력합니다.
+## 설정값
 
-```
-/plugin install addy-skills --marketplace holiday0726/Addy-skills
-```
-
-`claude plugin details addy-skills@addy-skills` 에 스킬 아홉 개가 보이면 설치된 것입니다.
-
-### 설치 확인과 갱신
-
-```sh
-claude plugin details lanekeeper@lanekeeper    # Skills (1), Hooks (2) 가 보이면 설치된 것
-```
-
-플러그인은 받은 폴더를 그대로 읽습니다. 설치한 뒤에는 그 폴더를 옮기거나 지우지 마세요. 새 판을 받을 때는 그 폴더에서 `git pull` 한 뒤 세션을 다시 열거나 세션 안에서 `/reload-plugins` 를 입력합니다.
-
-인터넷이 안 되는 PC 라면 다른 곳에서 묶어 옮깁니다.
-
-```sh
-cd lanekeeper
-git bundle create ../lanekeeper.bundle HEAD main      # 받는 쪽: git clone lanekeeper.bundle lanekeeper
-git archive --format=zip -o ../lanekeeper.zip main    # 받는 쪽: 압축을 풀기만 하면 됨
-```
-
-### 설정값
-
-설치할 때 `--config 키=값` 으로 주고, 나중에는 `claude plugin configure lanekeeper@lanekeeper` 나 세션 안 `/plugin configure lanekeeper@lanekeeper` 로 바꿉니다.
+앞의 둘은 `/lanekeeper:setup` 이 채웁니다. 바꿀 때는 `claude plugin configure lanekeeper@lanekeeper` 나 세션 안 `/plugin configure lanekeeper@lanekeeper` 를 씁니다.
 
 | 키 | 필수 | 뜻 | 기본값 |
 |---|---|---|---|
-| `python` | 예 | 훅을 돌릴 Python 3 명령. Linux 와 macOS 는 `python3`, Windows 는 `python.exe` 절대 경로 | 없음 |
+| `python` | 예 | 훅을 돌릴 Python 3 명령. Linux 와 macOS 는 `python3`, Windows 는 `/` 로 쓴 `python.exe` 절대 경로(훅이 셸 없이 실행) | 없음 |
 | `hub_dir` | 예 | 허브 폴더의 절대 경로. Windows 는 `C:/Users/<나>/hub` 처럼 `/` 로 씁니다 | 없음 |
 | `dashboard_port` | 아니오 | 대시보드 포트. 주소는 늘 `127.0.0.1` 입니다 | `4990` |
 | `orca` | 아니오 | 허브 세션을 열 때 Orca 브라우저 탭으로 대시보드를 열지 | 켬(`orca` 명령이 있을 때만) |
+| `lane_message_hub_only` | 아니오 | 워커가 허브에게만 `SendMessage` 하게 할지([훅](#훅)) | 꺼짐 |
 
 ## 허브 폴더 만들기
 

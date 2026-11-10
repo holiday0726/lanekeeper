@@ -31,7 +31,7 @@
     { "id": "ask", "from": "user", "to": "hub", "y": 176, "label": "일 맡기기", "variant": "emphasis" },
     { "id": "register", "from": "hub", "to": "hubdir", "y": 208, "label": "agents.json 에 세션 등록", "variant": "default" },
     { "id": "spawn", "from": "hub", "to": "worker", "y": 240, "label": "claude --bg 로 띄우기", "variant": "default" },
-    { "id": "assign", "from": "hub", "to": "worker", "y": 272, "label": "[배정] SendMessage", "variant": "emphasis", "note": "작업 세션은 worktree 에서 일하고 커밋합니다. git 문구 훅이 커밋 문구를 검사합니다." },
+    { "id": "assign", "from": "hub", "to": "worker", "y": 272, "label": "[배정] SendMessage", "variant": "emphasis", "note": "작업 세션은 worktree 에서 일하고 커밋합니다. 레인 쓰기 보호 훅이 다른 레인 경로 쓰기를 막습니다." },
     { "id": "report", "from": "worker", "to": "hub", "y": 352, "label": "[보고] SendMessage", "variant": "return" },
     { "id": "record", "from": "hub", "to": "hubdir", "y": 384, "label": "STATUS.md 반영", "variant": "default", "note": "결정이 필요하면 decisions.json 에 올립니다." },
     { "id": "read", "from": "dash", "to": "hubdir", "y": 472, "label": "몇 초마다 읽기", "variant": "dashed" },

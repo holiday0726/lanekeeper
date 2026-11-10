@@ -22,7 +22,7 @@ svg { width: 100%; min-width: 1000px; display: block; }
 <div class="scroll">
 <svg viewBox="0 24 1000 524" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="architecture-title architecture-desc">
 <title id="architecture-title">lanekeeper 구성</title>
-<desc id="architecture-desc">사용자가 허브 세션에 지시하면 허브가 슈퍼바이저와 작업 세션에 배정하고 보고를 받아 허브 폴더에 기록하며, 대시보드가 그 폴더를 읽고 플러그인 훅 세 개가 대시보드 기동, 허브 폴더 보호, 커밋 문구 검사를 맡는 구성.</desc>
+<desc id="architecture-desc">사용자가 허브 세션에 지시하면 허브가 슈퍼바이저와 작업 세션에 배정하고 보고를 받아 허브 폴더에 기록하며, 대시보드가 그 폴더를 읽고 플러그인 훅 두 개가 대시보드 기동과 허브 폴더와 레인 쓰기 보호를 맡는 구성.</desc>
 <defs>
 <pattern id="architecture-dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="0.9" fill="rgba(45,49,66,0.1)"/></pattern>
 <marker id="architecture-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
@@ -30,7 +30,7 @@ svg { width: 100%; min-width: 1000px; display: block; }
 </defs>
 <rect y="24" width="1000" height="524" fill="#f5f5f5"/>
 <rect y="24" width="1000" height="524" fill="url(#architecture-dots)" opacity="0.55"/>
-<rect x="480" y="304" width="484" height="120" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.1)" stroke-width="0.8"/>
+<rect x="480" y="304" width="328" height="120" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.1)" stroke-width="0.8"/>
 <rect x="496" y="308" width="104" height="12" rx="2" fill="#f5f5f5"/>
 <text x="548" y="317" fill="#5a6580" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">LANEKEEPER HOOKS</text>
 <path d="M 152,136 H 218" fill="none" stroke="#bf4520" stroke-width="1.4" marker-end="url(#architecture-arrow-accent)"/>
@@ -42,7 +42,6 @@ svg { width: 100%; min-width: 1000px; display: block; }
 <path d="M 220,352 H 166" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
 <path d="M 496,368 H 398" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
 <path d="M 722,400 V 452 Q 722,460 714,460 H 110 Q 102,460 102,452 V 386" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
-<path d="M 878,336 V 224 Q 878,216 870,216 H 706" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
 <rect x="168" y="112" width="36" height="16" rx="2" fill="#f5f5f5"/>
 <text x="186" y="124" fill="#bf4520" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif" text-anchor="middle">지시</text>
 <rect x="470" y="72" width="36" height="16" rx="2" fill="#f5f5f5"/>
@@ -62,7 +61,6 @@ svg { width: 100%; min-width: 1000px; display: block; }
 <rect x="392" y="466" width="36" height="16" rx="2" fill="#f5f5f5"/>
 <text x="410" y="478" fill="#4f5d75" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif" text-anchor="middle">띄움</text>
 <rect x="886" y="268" width="68" height="16" rx="2" fill="#f5f5f5"/>
-<text x="920" y="280" fill="#4f5d75" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif" text-anchor="middle">커밋 검사</text>
 <rect x="40" y="104" width="112" height="64" rx="6" fill="#f5f5f5"/>
 <rect x="40" y="104" width="112" height="64" rx="6" fill="rgba(79,93,117,0.10)" stroke="#5a6580" stroke-width="1"/>
 <rect x="48" y="112" width="27" height="12" rx="2" fill="transparent" stroke="#5a6580" stroke-opacity="0.5" stroke-width="0.8"/>
@@ -102,20 +100,14 @@ svg { width: 100%; min-width: 1000px; display: block; }
 <rect x="496" y="336" width="140" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
 <rect x="504" y="344" width="32" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.4)" stroke-opacity="0.5" stroke-width="0.8"/>
 <text x="520" y="353" fill="#2d3142" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">HOOK</text>
-<text x="566" y="374" fill="#2d3142" font-size="13" font-weight="600" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif" text-anchor="middle">허브 폴더 보호</text>
-<text x="566" y="390" fill="#5a6580" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">PreToolUse Edit/Write</text>
+<text x="566" y="374" fill="#2d3142" font-size="13" font-weight="600" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif" text-anchor="middle">레인 쓰기 보호</text>
+<text x="566" y="390" fill="#5a6580" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">PreToolUse 쓰기, Bash</text>
 <rect x="652" y="336" width="140" height="64" rx="6" fill="#f5f5f5"/>
 <rect x="652" y="336" width="140" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
 <rect x="660" y="344" width="32" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.4)" stroke-opacity="0.5" stroke-width="0.8"/>
 <text x="676" y="353" fill="#2d3142" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">HOOK</text>
 <text x="722" y="374" fill="#2d3142" font-size="13" font-weight="600" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif" text-anchor="middle">대시보드 열기</text>
 <text x="722" y="390" fill="#5a6580" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">SessionStart</text>
-<rect x="808" y="336" width="140" height="64" rx="6" fill="#f5f5f5"/>
-<rect x="808" y="336" width="140" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-<rect x="816" y="344" width="32" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.4)" stroke-opacity="0.5" stroke-width="0.8"/>
-<text x="832" y="353" fill="#2d3142" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">HOOK</text>
-<text x="878" y="374" fill="#2d3142" font-size="13" font-weight="600" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif" text-anchor="middle">git 문구 검사</text>
-<text x="878" y="390" fill="#5a6580" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">PreToolUse Bash</text>
 <line x1="40" y1="496" x2="960" y2="496" stroke="rgba(45,49,66,0.1)" stroke-width="0.8"/>
 <text x="40" y="512" fill="#4f5d75" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" letter-spacing="0.18em">LEGEND</text>
 <rect x="40" y="522" width="14" height="10" rx="2" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
