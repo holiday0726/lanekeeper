@@ -122,6 +122,11 @@ def test_lane_nt(name, want, inp, project):
     ('git commit -m "a > b"', []),
     ('echo "unclosed', []),
     ('cat < in > out', ['out']),
+    ('cp a b\ncat /home/u/hub/COORDINATION.md', ['b']),              # a new line ends a command
+    ("cat > out <<'EOF'\nif a > b: pass\nEOF", ['out']),             # a heredoc body is not a command
+    ('python3 - <<EOF\nprint(1 > 0)\nEOF\necho x > after', ['after']),
+    ('echo "a\nb" > q', ['q']),                                        # a new line inside quotes stays
+    ("cat <<EOF > empty\nEOF\ntee -a log", ['empty', 'log']),         # empty heredoc, redirect on the opening line
 ])
 def test_bash_targets(cmd, want):
     assert [p for p, _ in bash_targets(cmd)] == want

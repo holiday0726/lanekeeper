@@ -20,6 +20,7 @@
 import json
 import os
 import posixpath
+import re
 import shlex
 import sys
 
@@ -30,6 +31,9 @@ WRITE_TOOLS = ('Edit', 'Write', 'MultiEdit', 'NotebookEdit')
 SPLIT = {';', ';;', '&&', '||', '|', '&', '|&', '(', ')'}
 REDIRECT = {'>', '>>', '>|', '&>', '&>>', '>&'}
 WRAPPERS = ('sudo', 'command', 'env', 'nohup', 'time', 'exec')
+SEP_CHARS = set(';&|()\n')
+# 히어독 본문은 명령이 아니다. 여는 줄의 나머지는 두고 본문과 끝 줄만 걷어낸다
+HEREDOC = re.compile(r"<<-?[ \t]*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1([^\n]*)\n(?:.*?\n)?[ \t]*\2[ \t]*(?=\n|$)", re.S)
 
 
 def read_roster(hub):
@@ -86,15 +90,17 @@ def sed_files(args):
 def bash_targets(cmd):
     """명령 문자열의 쓰기 대상 [(경로, 그때까지 cd 한 폴더 또는 '')]. 따옴표가 깨져 못 읽으면 []."""
     try:
-        lex = shlex.shlex(cmd, posix=True, punctuation_chars=';&|()<>')
+        cmd = HEREDOC.sub(lambda m: '<< ' + m.group(2) + m.group(3), cmd)
+        lex = shlex.shlex(cmd, posix=True, punctuation_chars=';&|()<>\n')
         lex.whitespace_split = True
+        lex.whitespace = ' \t\r'   # 따옴표 밖 줄바꿈은 명령을 나눈다
         lex.commenters = ''
         toks = list(lex)
     except ValueError:
         return []
     out, base, cur = [], '', []
     for t in toks + [';']:
-        if t not in SPLIT:
+        if t not in SPLIT and not (set(t) <= SEP_CHARS and '\n' in t):
             cur.append(t)
             continue
         args, it = [], iter(cur)
