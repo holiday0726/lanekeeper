@@ -508,6 +508,15 @@ def test_todos():
 def test_static_files():
     missing = [n for n, _ in server.STATIC.values() if not os.path.isfile(os.path.join(server.ROOT, n))]
     assert not missing, missing   # every page and vendor file the server hands out is in the folder
+    import re
+    page = open(os.path.join(server.ROOT, 'index.html'), encoding='utf-8').read()
+    agents_js = open(os.path.join(server.ROOT, 'js', 'agents.js'), encoding='utf-8').read()
+    wanted = set(re.findall(r'(?:src|href)="(/[^"]+)"', page)) | set(re.findall(r"add\('(/[^']+)'\)", agents_js))
+    assert {'/js/office.js', '/vendor/three.min.js', '/js/main.js', '/app.css'} <= wanted, wanted
+    assert not wanted - set(server.STATIC), wanted - set(server.STATIC)   # every file the page asks for is served
+    assert 'three' not in page, 'three.js loads only when the 3D office is turned on'
+    shipped = {'/js/' + n for n in os.listdir(os.path.join(server.ROOT, 'js'))}
+    assert shipped <= set(server.STATIC), shipped - set(server.STATIC)
 
 
 def test_parse_offset_and_token():

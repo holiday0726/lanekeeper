@@ -269,7 +269,7 @@ The sessions and data on screen are samples for illustration.
 
 | Tab | What it shows |
 |---|---|
-| 에이전트 (Agents) | An isometric 3D office at the top. Each session has a desk: it sits and types while it works, shows an orange `!` when it waits for you, and walks to the lounge when it rests. Assignment and report sheets fly between the hub and the desks. Drag to turn the room, click a person to open that session. Below it, a flow chart of the sessions around the hub, or the card list. Click a session to see its conversation and the `claude logs` view. Without WebGL only the flow chart shows |
+| 에이전트 (Agents) | A flow chart with the hub in the middle, or a card list; click a session for its conversation and the `claude logs` screen. The `3D 오피스` (3D office) button turns on an optional isometric office above it and only then loads three.js. Each session has a desk: it sits and types while it works, shows an orange `!` when it waits for you, and walks to the lounge when it rests. Assignment and report sheets fly between the hub and the desks. Drag to turn the room, click a person to open that session. Without WebGL the office stays hidden |
 | 결정 (Decisions) | Decision items from `decisions.json` and sessions waiting for user input right now |
 | 현황 (Status) | `STATUS.md` |
 | 흐름 (Flow) | `SendMessage` between sessions as a graph and a list. The graph is tilted 3D by default (drag or arrow keys to turn it) and can be switched to flat. The prefixes `[배정]`, `[보고]` and `[알림]` tell the kinds apart |
@@ -322,7 +322,7 @@ Do not bind it to `0.0.0.0` or put it behind a public tunnel service. Anyone who
 
 ```
 .claude-plugin/   plugin.json, marketplace.json
-dashboard/        server.py, index.html, test_server.py, vendor/
+dashboard/        server.py, index.html, app.css, js/, test_server.py, vendor/
 docs/             README images (images/) and their sources (diagrams/)
 examples/         hub.settings.json, supervisor.settings.json, user.settings.json
 hooks/            hooks.json, open_dashboard.py, lane_guard.py, hubpath.py

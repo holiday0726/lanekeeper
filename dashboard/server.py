@@ -60,6 +60,9 @@ STATIC = {
     '/vendor/xterm.js': ('vendor/xterm.js', 'text/javascript; charset=utf-8'),
     '/vendor/xterm.css': ('vendor/xterm.css', 'text/css; charset=utf-8'),
     '/vendor/WantedSansVariable.woff2': ('vendor/WantedSansVariable.woff2', 'font/woff2'),
+    '/app.css': ('app.css', 'text/css; charset=utf-8'),
+    **{f'/js/{n}': (f'js/{n}', 'text/javascript; charset=utf-8') for n in (
+        'core.js', 'agents.js', 'office.js', 'decisions.js', 'todo.js', 'status.js', 'flow.js', 'detail.js', 'bars.js', 'main.js')},
     '/vendor/three.min.js': ('vendor/three.min.js', 'text/javascript; charset=utf-8'),
     '/vendor/OrbitControls.js': ('vendor/OrbitControls.js', 'text/javascript; charset=utf-8'),
 }

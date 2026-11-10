@@ -265,7 +265,7 @@ Copy-Item "$src\examples\supervisor.settings.json" "$hub\supervisor.settings.jso
 
 | 탭 | 보여 주는 것 |
 |---|---|
-| 에이전트 | 맨 위는 아이소메트릭 3D 오피스입니다. 세션마다 책상이 있고, 작업 중이면 앉아서 일하고, 사용자를 기다리면 오렌지 `!` 를 띄우고, 쉬면 라운지로 걸어갑니다. 배정과 보고 서류가 허브와 책상 사이를 날아갑니다. 끌면 방이 돌고, 사람을 누르면 그 세션으로 갑니다. 아래는 허브를 가운데 둔 흐름도나 카드 목록이고, 세션을 누르면 대화 기록과 `claude logs` 화면이 나옵니다. WebGL 이 없으면 흐름도만 보입니다 |
+| 에이전트 | 허브를 가운데 둔 흐름도나 카드 목록이고, 세션을 누르면 대화 기록과 `claude logs` 화면이 나옵니다. `3D 오피스` 단추로 켜면(선택, 그때 three.js 를 불러옴) 위에 아이소메트릭 오피스가 나옵니다. 세션마다 책상이 있고, 작업 중이면 앉아서 일하고, 사용자를 기다리면 오렌지 `!` 를 띄우고, 쉬면 라운지로 걸어갑니다. 배정과 보고 서류가 허브와 책상 사이를 날아갑니다. WebGL 이 없으면 오피스는 숨습니다 |
 | 결정 | `decisions.json` 의 결정 항목과 지금 사용자 입력을 기다리는 세션 |
 | 현황 | `STATUS.md` |
 | 흐름 | 세션 사이 `SendMessage` 를 그래프와 목록으로. 그래프는 기본이 기울어진 입체이고(끌거나 화살표 키로 돌림) 평면으로 바꿀 수 있습니다. `[배정]`, `[보고]`, `[알림]` 머리말로 종류를 나눕니다 |
@@ -318,7 +318,7 @@ $env:HUB_DIR = "C:\Users\<나>\hub"; $env:PORT = "4990"; py -3 C:\Users\<나>\la
 
 ```
 .claude-plugin/   plugin.json, marketplace.json
-dashboard/        server.py, index.html, test_server.py, vendor/
+dashboard/        server.py, index.html, app.css, js/, test_server.py, vendor/
 docs/             README 그림(images/)과 그림 원본(diagrams/)
 examples/         hub.settings.json, supervisor.settings.json, user.settings.json
 hooks/            hooks.json, open_dashboard.py, lane_guard.py, hubpath.py
