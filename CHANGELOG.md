@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.1
+
+Updates to the hub rule templates and the humanizer skill. An update does not touch your hub folder, so copy the lines you want from `templates/hub/CLAUDE.md` and `templates/hub/COORDINATION.md` into it by hand.
+
+### Changed
+
+- `templates/hub/CLAUDE.md`: up to 8 task sessions may run at once (was 4). A new line says the user sets this cap and that changing it means changing the subsession sentence in `supervisor.settings.json` too. The example `examples/supervisor.settings.json` now says subsessions count toward the cap of 8.
+- `skills/humanizer/SKILL.md`: a new rule at the top. Never use middle dots, dashes, arrows or a hyphen that joins two words. Keep a hyphen only where an ID, path, URL, command, code, branch name or date already has one. Two grep lines check the result. The rule comes before a writing sample and before the exceptions in §8 and §10.
+
+### Added
+
+- `templates/hub/CLAUDE.md`, optional merge delegation. When the user allows it, the hub has the lane session merge an MR that was verified in dev. Release and production still need the user's confirmation. A repository whose own rules say the user merges stays an exception, and the hub gives the user the MR link instead.
+- `templates/hub/CLAUDE.md`: a restarted hub session gets a new address, so lane reports can fail to arrive. After a restart the hub sends each running lane session one message saying the hub is back and reports go to the same name.
+- `templates/hub/COORDINATION.md`: when a worker's message to the hub fails, it saves the report to a file in its workspace and sends it again with the next hub message.
+- README step 6 under [Set up the hub folder](https://github.com/holiday0726/lanekeeper/blob/main/README.md#set-up-the-hub-folder) ([한국어](https://github.com/holiday0726/lanekeeper/blob/main/README.ko.md#허브-폴더-만들기)): set the session cap and decide on merge delegation.
+
 ## 0.5.0
 
 A new dashboard design. Nothing to change in your settings or your hub folder. After updating, stop the dashboard that is already running so the new one can start ([Updating](https://github.com/holiday0726/lanekeeper/blob/main/README.md#updating), [한국어](https://github.com/holiday0726/lanekeeper/blob/main/README.ko.md#업데이트)).

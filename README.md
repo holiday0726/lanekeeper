@@ -253,6 +253,7 @@ After copying, fill them in for your project. A plugin cannot set permissions or
 3. Merge the keys of `examples/user.settings.json` into your user settings (`~/.claude/settings.json`, on Windows `%USERPROFILE%\.claude\settings.json`) by hand. `crossSessionInbound: "accept"` lets messages between sessions arrive without waiting for approval.
 4. Put the hub folder path into `resident.hub.cwd` in `agents.json`, and match the name with `/rename hub` inside the hub session. The dashboard treats the session whose `lane` is `HUB` in this file as the hub.
 5. Fill in lanes, repositories and interfaces at the `<...>` spots in `CLAUDE.md` and `COORDINATION.md`.
+6. Decide two things in `CLAUDE.md`. Change the cap on task sessions running at once (8 by default) under "세션 다루기" (handling sessions) to fit your PC and plan. Merge delegation under "하지 않는 것" (what the hub does not do) is optional: delete that line if you do not use it, or write below it whether you allow it and which repositories are exceptions.
 
 ## Dashboard
 

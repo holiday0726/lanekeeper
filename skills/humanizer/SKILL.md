@@ -14,6 +14,20 @@ metadata:
 
 Rewrite AI-sounding text so it reads like the writer, not a chatbot. Keep what it says. Do not make anything up.
 
+## Always remove middle dots, dashes, arrows and joining hyphens
+
+Apply this rule every time you use the skill. It comes before a writing sample and before the exceptions in §8 and §10.
+
+- Do not use middle dots (U+00B7), dashes (U+2010 to U+2015, such as the em and en dash) or arrows (U+2190 to U+21FF). Use a comma, a full stop, "and" (in Korean 와, 과) or brackets, or rewrite the sentence.
+- Do not join two words with a hyphen (주간-월간, high-quality). Write them apart or rewrite.
+- Keep a hyphen only where the value already has one: IDs, paths, URLs, commands, code, branch names and dates (2026-11-09).
+- Check after you finish. Fix every line the second search finds unless it is one of the exceptions above.
+
+```bash
+grep -nP '[\x{00B7}\x{2010}-\x{2015}\x{2190}-\x{21FF}]' <file>
+grep -nP '[가-힣A-Za-z]-[가-힣A-Za-z]' <file>
+```
+
 ## Why AI text sounds the way it does
 
 A language model writes whatever is most likely to come next, so by default it makes the choice that fits the widest range of readers and subjects. A human writer chooses for one reader and one subject, so their choices are uneven and specific. Every pattern below is one form of the default choice:
