@@ -165,7 +165,8 @@ def test_hook_process(tmp_path):
     assert code == 2 and 'API' in err and '허브에 요청' in err
     assert run(tmp_path, W(str(web / 'a.py'), str(web)), web) == (0, '')
     assert run(tmp_path, W(str(hub / 'STATUS.md'), str(hub)), hub) == (0, '')
-    assert run(tmp_path, B('echo x > %s' % (api / 'a'), str(web)), web)[0] == 2
+    # bash 는 따옴표 없는 역슬래시를 지우므로 Windows 에서도 명령 안의 경로는 / 로 쓴다
+    assert run(tmp_path, B('echo x > %s' % str(api / 'a').replace('\\', '/'), str(web)), web)[0] == 2
     assert run(tmp_path, W(str(hub / 'STATUS.md'), str(web)), web, hub_dir='') == (0, '')
     assert run(tmp_path, M('someone', str(web)), web)[0] == 0
     assert run(tmp_path, M('someone', str(web)), web, 'true')[0] == 2
