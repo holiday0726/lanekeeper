@@ -7,7 +7,9 @@
           {
             "type": "command",
             "command": "${user_config.python}",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/open_dashboard.py"],
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/open_dashboard.py"
+            ],
             "timeout": 40,
             "statusMessage": "에이전트 대시보드 확인 중"
           }
@@ -16,12 +18,15 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|SendMessage",
         "hooks": [
           {
             "type": "command",
             "command": "${user_config.python}",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/hub_only_write.py"],
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/lane_guard.py",
+              "${user_config.lane_message_hub_only}"
+            ],
             "timeout": 10
           }
         ]
@@ -32,7 +37,10 @@
           {
             "type": "command",
             "command": "${user_config.python}",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/git-message-style.py", "${user_config.git_message_check}"],
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/git-message-style.py",
+              "${user_config.git_message_check}"
+            ],
             "timeout": 10,
             "statusMessage": "커밋 문구 규칙 검사"
           }

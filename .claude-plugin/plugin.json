@@ -35,6 +35,12 @@
       "description": "허브 세션이 열릴 때 orca 명령이 있으면 대시보드를 Orca 브라우저 탭으로 엽니다. 설정하지 않으면 켜짐입니다.",
       "default": true
     },
+    "lane_message_hub_only": {
+      "type": "boolean",
+      "title": "워커 메시지는 허브에게만",
+      "description": "켜면 허브가 아닌 세션의 SendMessage 를 허브(agents.json 에서 lane 이 HUB 인 이름)와 main 에게만 보내게 합니다. uds: 주소로 답하는 것은 막지 않습니다. 설정하지 않으면 꺼짐입니다.",
+      "default": false
+    },
     "git_message_check": {
       "type": "boolean",
       "title": "git 문구 검사",

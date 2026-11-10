@@ -130,7 +130,8 @@ claude plugin install addy-skills --marketplace holiday0726/Addy-skills
    다른 PC 의 브라우저로 볼 때는 아래 "다른 PC 에서 대시보드 보기" 를 알린다.
 3. 허브 세션 안에서 `/rename hub` 를 입력한다.
    대시보드는 `agents.json` 의 `hub` 세션을 허브로 본다.
-4. 손으로 채울 자리: `.claude/settings.json` 의 `<레인 저장소>` 자리, `supervisor.settings.json` 의 `autoMode.allow`, `CLAUDE.md` 와 `COORDINATION.md` 의 `<...>` 자리.
+4. 손으로 채울 자리: `agents.json` 의 `lanes`(레인마다 소유 경로의 절대 경로 목록), `.claude/settings.json` 의 `<레인 저장소>` 자리, `supervisor.settings.json` 의 `autoMode.allow`, `CLAUDE.md` 와 `COORDINATION.md` 의 `<...>` 자리.
+   `lanes` 를 채운 뒤 `<PY> "${CLAUDE_PLUGIN_ROOT}/scripts/lane_deny.py" "<허브 폴더>"` 가 찍는 줄을 `.claude/settings.json` 의 `permissions.deny` 에 넣으면 허브 세션도 레인 저장소를 고치지 못한다.
 
 3단계에서 `kept` 가 나온 키와 4단계에서 바꾸지 않은 값이 있으면 여기서 다시 짚는다.
 

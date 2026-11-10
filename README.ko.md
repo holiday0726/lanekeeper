@@ -247,7 +247,7 @@ Copy-Item "$src\examples\supervisor.settings.json" "$hub\supervisor.settings.jso
 1. `.claude/settings.json`: 허브 세션의 모델과 권한입니다. `deny` 의 `<레인 저장소>` 자리에 허브가 직접 고치면 안 되는 저장소를, `additionalDirectories` 에 그 저장소들의 상위 폴더를 넣습니다.
 2. `supervisor.settings.json`: 허브가 슈퍼바이저 세션을 띄울 때 `--settings` 로 붙이는 파일입니다. 슈퍼바이저에게 허락할 일을 `autoMode.allow` 에 문장으로 적습니다.
 3. 사용자 설정(`~/.claude/settings.json`, Windows 는 `%USERPROFILE%\.claude\settings.json`)에 `examples/user.settings.json` 의 키를 손으로 합칩니다. `crossSessionInbound: "accept"` 가 있어야 세션 사이 메시지가 승인 대기 없이 바로 전달됩니다.
-4. `agents.json` 의 `resident.hub.cwd` 에 허브 폴더 경로를 넣고, 허브 세션 안에서 `/rename hub` 로 이름을 맞춥니다. 대시보드는 이 파일에서 `lane` 이 `HUB` 인 세션을 허브로 봅니다.
+4. `agents.json` 의 `resident.hub.cwd` 에 허브 폴더 경로를 넣고, 허브 세션 안에서 `/rename hub` 로 이름을 맞춥니다. 대시보드는 이 파일에서 `lane` 이 `HUB` 인 세션을 허브로 봅니다. `lanes` 에는 레인마다 소유 경로를 적습니다(예: `"WEB": ["~/projects/web"]`). 레인 쓰기 보호 훅이 이것을 읽습니다. `python3 ~/lanekeeper/scripts/lane_deny.py ~/hub` 가 1단계 `deny` 에 넣을 줄을 찍어 줍니다.
 5. `CLAUDE.md` 와 `COORDINATION.md` 의 `<...>` 자리에 레인, 저장소, 인터페이스를 적습니다.
 6. `CLAUDE.md` 에서 두 가지를 정합니다. "세션 다루기" 의 동시 작업 세션 상한(기본 8개)은 사용하는 PC 와 요금제에 맞게 바꿉니다. "하지 않는 것" 의 병합 위임은 선택입니다. 쓰지 않으면 그 줄을 지우고, 쓰면 허락 여부와 예외 저장소를 그 아래에 적습니다.
 
@@ -307,7 +307,7 @@ $env:HUB_DIR = "C:\Users\<나>\hub"; $env:PORT = "4990"; py -3 C:\Users\<나>\la
 | 훅 | 언제 | 하는 일 |
 |---|---|---|
 | 대시보드 열기 (`open_dashboard.py`) | 세션 시작(SessionStart) | 프로젝트 폴더가 `hub_dir` 이거나 그 아래일 때만 동작합니다. 대시보드가 꺼져 있으면 띄우고, `orca` 가 켜져 있으면 Orca 탭으로 엽니다. 떠 있는 서버가 다른 판이면 끄라고 알립니다([업데이트](#업데이트)) |
-| 허브 폴더 보호 (`hub_only_write.py`) | Edit, Write, NotebookEdit 직전 | 허브 폴더 밖에서 연 세션이 허브 폴더의 파일을 고치려 하면 막고, 허브에 보고하라고 알립니다. Windows 경로는 대소문자와 역슬래시, `/c/` 꼴을 같은 경로로 봅니다 |
+| 레인 쓰기 보호 (`lane_guard.py`) | Edit, Write, NotebookEdit, Bash, SendMessage 직전 | 허브 폴더는 허브, 허브 `agents.json` 의 `lanes` 에 적은 경로는 그 레인의 것입니다. 세션은 연 폴더로 레인이 정해지고(`<저장소>/.claude/worktrees/` 아래 worktree 는 그 저장소 레인) 자기 레인에만 씁니다. 다른 곳에 쓰려 하면 막고 허브에 요청하라고 알립니다. Windows 경로는 대소문자와 역슬래시, `/c/` 꼴을 같은 경로로 봅니다. Bash 는 리다이렉트(`>`, `>>`), `tee`, `sed -i`, `cp`, `mv` 만 최선으로 봅니다. 변수, 스크립트, 다른 명령은 지나가니 실수를 막는 장치이지 보안 경계가 아닙니다. 설정 `lane_message_hub_only` 를 켜면 워커는 허브에게만 `SendMessage` 합니다 |
 | git 문구 검사 (`git-message-style.py`) | Bash, PowerShell 명령 직전 | `git commit`, `merge`, `tag`, `revert` 와 `gh pr create`, `edit` 문구가 개조식 규칙을 어기면 막습니다. 기본은 꺼짐이고 설정값 `git_message_check` 를 `true` 로 넣으면 켜집니다. 켠 뒤 잠시 끄려면 환경변수 `CLAUDE_GIT_STYLE=off` |
 
 ## 스킬

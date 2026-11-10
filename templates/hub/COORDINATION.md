@@ -24,6 +24,7 @@
 | HUB | 허브 폴더 | 이 문서, `STATUS.md`, `agents.json`, `decisions.json`, `dev-occupancy.json` |
 | `<레인>` | `<저장소 또는 폴더>` | `<상주 세션 이름, 금지 규칙>` |
 
+- 이 표의 소유 경로는 허브 폴더 `agents.json` 의 `lanes` 에도 같게 적는다. lanekeeper 훅이 그것을 읽어 다른 레인 경로 쓰기를 막는다. 표를 고치면 `lanes` 도 고친다.
 - 허브 폴더는 허브만 쓴다. 다른 세션의 Edit/Write 는 lanekeeper 플러그인 훅이 막으니, 바꿀 내용은 허브에 보고한다.
 - 한 작업 트리에 세션이 여럿이어도 바로 나누지 않는다. 같은 파일을 같이 고치게 될 때 나눈다.
 - 허브가 `claude --bg` 로 띄운 세션은 스스로 `<저장소>/.claude/worktrees/` 아래로 옮겨 가니 그대로 둔다.

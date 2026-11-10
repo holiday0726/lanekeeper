@@ -1,4 +1,4 @@
-"""허브 폴더 경로 판정. 두 훅(hub_only_write, open_dashboard)이 같이 쓴다.
+"""허브 폴더와 레인 경로 판정. 두 훅(lane_guard, open_dashboard)과 scripts 가 같이 쓴다.
 
 Windows 경로는 문자열로만 다뤄 Linux 에서도 시험할 수 있다: 역슬래시와 / 를 같게, 대소문자를 무시,
 Git Bash 꼴 /c/Users 와 Cygwin 꼴 /cygdrive/c/Users 를 c:/Users 로 본다.
