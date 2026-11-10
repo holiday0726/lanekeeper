@@ -2,12 +2,15 @@
 """Read-only local dashboard for running Claude Code and Codex sessions (127.0.0.1:4990).
 
 HUB_DIR picks the hub folder (default: the current folder) and PORT the port (default 4990).
+LANEKEEPER_TOKEN, when set, is required: open /?token=<value> once and the page keeps it in a cookie. It keeps other
+accounts on the same PC out; without it anyone who can reach 127.0.0.1 can read the dashboard.
 
 Nothing here writes to sessions or stores transcript content; every API call
 reads `claude agents`, `claude logs`, /proc or the session .jsonl and answers in memory.
 """
 import glob
 import hashlib
+import hmac
 import json
 import math
 import os
@@ -17,10 +20,12 @@ import subprocess
 import threading
 import time
 from datetime import datetime
+from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 HOST, PORT = '127.0.0.1', int(os.environ.get('PORT', 4990))
+TOKEN = os.environ.get('LANEKEEPER_TOKEN', '')   # optional; empty means no token check
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -851,6 +856,30 @@ def parse_hours(v):
     return h, ''
 
 
+def parse_offset(v):
+    """(offset, '') for /api/transcript?from=; missing means -1 (start from the newest events). A bad value gives (None, reason)."""
+    if v is None:
+        return -1, ''
+    if not re.fullmatch(r'-?[0-9]{1,15}', v):
+        return None, f'from 은 정수여야 함: {v[:40]}'
+    return int(v), ''
+
+
+def token_ok(query_token, cookie_header, token=None):
+    """Whether a request may pass the optional LANEKEEPER_TOKEN check, by ?token= or the lk_token cookie."""
+    token = TOKEN if token is None else token
+    if not token:
+        return True
+    got = query_token or ''
+    if not got and cookie_header:
+        try:
+            c = SimpleCookie(cookie_header).get('lk_token')
+        except CookieError:
+            c = None
+        got = c.value if c else ''
+    return hmac.compare_digest(got.encode(), token.encode())
+
+
 def messages(hours=24, now=None, root=PROJECTS, rows=(), names=None):
     """Messages between Claude sessions in the last `hours` (0: all), with the graph's nodes and edges.
 
@@ -902,7 +931,7 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
-    def send(self, code, body, ctype='application/json; charset=utf-8'):
+    def send(self, code, body, ctype='application/json; charset=utf-8', headers=()):
         if isinstance(body, (dict, list)):
             body = json.dumps(body, ensure_ascii=False)
         if isinstance(body, str):
@@ -913,6 +942,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('X-Lanekeeper-Version', VERSION)
+        for k, v in headers:
+            self.send_header(k, v)
         self.end_headers()
         self.wfile.write(body)
 
@@ -922,6 +953,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(403, {'error': 'bad host'})
         url = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(url.query).items()}
+        if not token_ok(q.get('token'), self.headers.get('Cookie')):
+            return self.send(401, {'error': 'token 이 필요함: /?token=<LANEKEEPER_TOKEN> 으로 한 번 연다'})
+        if TOKEN and 'token' in q:   # keep it in a cookie and drop it from the address bar
+            return self.send(302, b'', 'text/plain', (('Location', url.path), (
+                'Set-Cookie', f'lk_token={TOKEN}; Path=/; HttpOnly; SameSite=Strict')))
         try:
             if url.path in STATIC:
                 name, ctype = STATIC[url.path]
@@ -962,15 +998,18 @@ class Handler(BaseHTTPRequestHandler):
                 except OSError:
                     return self.send(200, {'missing': True, 'path': STATUS_MD})
             if url.path == '/api/transcript':
+                start, why = parse_offset(q.get('from'))
+                if why:
+                    return self.send(400, {'error': why})
                 a = next((a for a in agents() if a.get('sessionId') == q.get('sid')), None)
                 if not a:
                     return self.send(404, {'error': '목록에 없는 세션'})
                 if a.get('engine') == 'codex':
-                    return self.send(200, read_transcript(a['path'], int(q.get('from', -1)), codex_events_of))
+                    return self.send(200, read_transcript(a['path'], start, codex_events_of))
                 p = transcript_path(a['sessionId'], a.get('cwd'))
                 if not p:
                     return self.send(200, {'offset': 0, 'reset': True, 'events': [], 'missing': True})
-                return self.send(200, read_transcript(p, int(q.get('from', -1))))
+                return self.send(200, read_transcript(p, start))
             if url.path == '/api/logs':
                 a = next((a for a in agents() if a.get('id') and a['id'] == q.get('id')), None)
                 if not a:

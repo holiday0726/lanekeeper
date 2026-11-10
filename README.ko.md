@@ -297,7 +297,7 @@ $env:HUB_DIR = "C:\Users\<나>\hub"; $env:PORT = "4990"; py -3 C:\Users\<나>\la
   ssh -N -L 4990:127.0.0.1:4990 <사용자>@<호스트>
   ```
 
-`0.0.0.0` 으로 열거나 공개 터널 서비스에 올리지 않습니다. 대시보드에는 인증이 없어 주소에 닿는 누구나 세션 대화 기록과 로그를 읽을 수 있습니다.
+`0.0.0.0` 으로 열거나 공개 터널 서비스에 올리지 않습니다. 주소에 닿는 누구나 세션 대화 기록과 로그를 읽을 수 있습니다. 같은 PC 에 다른 계정이 들어온다면 허브 세션을 열기 전에 환경 변수 `LANEKEEPER_TOKEN` 에 긴 임의 값을 넣습니다. 그러면 서버는 `http://127.0.0.1:<포트>/?token=<값>` 을 한 번 연 브라우저(쿠키로 기억)에만 답하고, 세션 시작 메시지가 그 주소를 알려 줍니다.
 
 ## 훅
 
@@ -331,14 +331,12 @@ tests/            훅과 설치 스크립트 시험
 ## 시험 돌리기
 
 ```sh
-python3 dashboard/test_server.py        # 대시보드 서버
-python3 -m pytest tests/test_lane_guard.py    # 레인 쓰기 보호, Windows 경로 꼴 포함
-python3 tests/test_open_dashboard.py    # 대시보드 열기 훅, 빈 포트에 서버를 띄웠다가 끕니다
-python3 tests/test_setup_hub.py         # 설치 스크립트, 임시 폴더와 가짜 HOME 으로만 돕니다
+python3 -m pip install pytest
+python3 -m pytest -q                    # 훅, 설치 스크립트, 대시보드 서버(tests/, dashboard/)
 claude plugin validate --strict .       # 매니페스트 검사
 ```
 
-Windows 에서는 `python3` 자리에 `py -3` 을 씁니다. 훅 시험은 Windows 한국어 로캘과 같은 조건(표준 입출력 기본값 cp949)으로 돌아갑니다.
+Windows 에서는 `python3` 자리에 `py -3` 을 씁니다. 훅 시험은 Windows 한국어 로캘과 같은 조건(표준 입출력 기본값 cp949)으로 돌아갑니다. GitHub Actions 가 push 마다 Linux 와 Windows 에서 같은 시험을 돌립니다([.github/workflows/test.yml](.github/workflows/test.yml)).
 
 ## 라이선스와 출처
 

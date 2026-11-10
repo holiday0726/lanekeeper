@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 
 from hubpath import inside, native, norm
@@ -39,6 +40,8 @@ def up(url):
     try:   # 회사 PC 의 시스템 프록시를 타지 않게 프록시 없이 연다
         with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(url, timeout=2) as r:
             return r.headers.get('X-Lanekeeper-Version', '')
+    except urllib.error.HTTPError as e:   # 토큰을 켠 서버는 401 로 답해도 떠 있는 것이다
+        return e.headers.get('X-Lanekeeper-Version', '')
     except OSError:
         return None
 
@@ -105,8 +108,11 @@ def main():
     if running is not None and running != mine:   # 업데이트 전에 띄운 서버는 옛 화면을 계속 보여 준다
         msg += ', 다만 서버 판(%s)이 플러그인 판(%s)과 달라 끄고 세션을 다시 열면 새 판이 뜸(끄는 법은 README "업데이트")' % (
             running or '0.4.1 이하', mine or '?')
+    token = os.environ.get('LANEKEEPER_TOKEN', '')
+    if token and running is not None:   # 토큰을 켰으면 처음 열 주소에 붙여 준다. 서버는 이 환경 변수를 물려받는다
+        msg += ', 처음 열 때는 %s/?token=%s' % (url, token)
     if opt('orca', 'true').lower() in ('true', '1', 'yes', 'on'):
-        msg += orca_tab(url, port)
+        msg += orca_tab(url + ('/?token=' + token if token else ''), port)
     msg += '. 다른 PC 에서 볼 때는 README 의 "다른 PC 에서 보기"'
     print(json.dumps({'systemMessage': msg}, ensure_ascii=False))
     return 0

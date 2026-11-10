@@ -301,7 +301,7 @@ The dashboard listens only on `127.0.0.1`, so it opens only on the computer wher
   ssh -N -L 4990:127.0.0.1:4990 <user>@<host>
   ```
 
-Do not bind it to `0.0.0.0` or put it behind a public tunnel service. The dashboard has no login, so anyone who can reach the address can read session conversations and logs.
+Do not bind it to `0.0.0.0` or put it behind a public tunnel service. Anyone who can reach the address can read session conversations and logs. If other accounts log in to the same PC, set the environment variable `LANEKEEPER_TOKEN` to a long random value before opening the hub session. The server then answers only to a browser that opened `http://127.0.0.1:<port>/?token=<value>` once (kept in a cookie), and the session start message shows that address.
 
 ## Hooks
 
@@ -335,14 +335,12 @@ tests/            tests for the hooks and the install script
 ## Running the tests
 
 ```sh
-python3 dashboard/test_server.py        # dashboard server
-python3 -m pytest tests/test_lane_guard.py    # lane write guard, including Windows path forms
-python3 tests/test_open_dashboard.py    # open dashboard hook, starts a server on a free port and stops it
-python3 tests/test_setup_hub.py         # install script, runs only on temp folders and a fake HOME
+python3 -m pip install pytest
+python3 -m pytest -q                    # hooks, install script and dashboard server (tests/, dashboard/)
 claude plugin validate --strict .       # manifest check
 ```
 
-On Windows use `py -3` in place of `python3`. The hook tests run under the same conditions as a Korean Windows locale (standard I/O default cp949).
+On Windows use `py -3` in place of `python3`. The hook tests run under the same conditions as a Korean Windows locale (standard I/O default cp949). GitHub Actions runs the same tests on Linux and Windows for every push ([.github/workflows/test.yml](.github/workflows/test.yml)).
 
 ## License and credits
 

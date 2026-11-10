@@ -8,7 +8,8 @@
 ```sh
 HUB_DIR=~/hub ./run.sh            # http://127.0.0.1:4990, 허브 폴더 ~/hub
 HUB_DIR=~/hub PORT=4991 python3 server.py   # 포트 바꾸기
-python3 test_server.py   # 기록 파서(Claude, Codex), agents.json 구분, 배치 순서, Codex 합치기, 결정 합치기와 정렬, 사용량 읽기, 메시지 중복 제거와 종류, 시간 창, dev 점유 파일, 처리 토큰 합산, hours 검사, 할 일 묶음과 정렬 점검
+python3 -m pytest -q test_server.py   # 기록 파서(Claude, Codex), agents.json 구분, 배치 순서, Codex 합치기, 결정 합치기와 정렬, 사용량 읽기, 메시지 중복 제거와 종류, 시간 창, dev 점유 파일, 처리 토큰 합산, hours 와 from 검사, 토큰, 할 일 묶음과 정렬 점검
+LANEKEEPER_TOKEN=<긴 임의 값> ./run.sh   # 토큰을 켜면 /?token=<값> 으로 한 번 연 브라우저에만 답한다(쿠키)
 CODEX_HOURS=72 ./run.sh  # Codex 세션을 보는 범위(시간, 기본 24)
 ```
 
