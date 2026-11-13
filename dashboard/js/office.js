@@ -18,13 +18,53 @@ function heroBox() {
   const labels = h('div', { class: 'hlabels' })
   const stage = h('div', { class: 'hstage' }, labels)
   const info = h('div', { class: 'hinfo' })
-  const box = h('section', { class: 'hero', 'aria-label': '세션 오피스' }, stage, info)
-  hero = { box, stage, labels, info, ok: false, figs: new Map(), raf: 0, paused: false, last: 0, mark: null, o: null }
+  const grip = h('div', { class: 'hgrip', role: 'separator', tabindex: 0, 'aria-orientation': 'horizontal', 'aria-valuemin': 0,
+    'aria-label': '오피스 높이. 끌거나 위아래 화살표로 바꾸고, 끝까지 올리면 접힙니다', title: '끌어서 오피스 높이 바꾸기' })
+  const box = h('section', { class: 'hero', 'aria-label': '세션 오피스' }, stage, info, grip)
+  hero = { box, stage, labels, info, grip, ok: false, folded: false, figs: new Map(), raf: 0, paused: false, last: 0, mark: null, o: null }
+  gripInit(grip)
   const hold = v => () => { hero.paused = v; heroLoop() }
   box.addEventListener('mouseenter', hold(true)); box.addEventListener('mouseleave', hold(false))
   box.addEventListener('focusin', hold(true)); box.addEventListener('focusout', hold(false))
   try { officeInit(); hero.ok = true } catch (e) { box.classList.add('flat') }   // no THREE or no WebGL: the list alone
   return box
+}
+
+/* the line under the office: drag it (mouse or touch) or press the up and down arrows on it to set the office height.
+   Below OFFICE_FOLD px the office folds away and stops drawing; the line stays to pull it back. The height is kept.
+   The room is framed again on every size change (officeResize, about 4% to spare). */
+const OFFICE_FOLD = 120, OFFICE_STEP = 40, OFFICE_OPEN = 200
+// taller than the room at this width (hero.natH, from officeResize) only adds empty space: stop there or at 85% of the window
+const officeMax = () => Math.max(OFFICE_OPEN, Math.min(Math.round(innerHeight * 0.85), hero.natH || Infinity))
+function setOfficeH(px, save, from = 0) {   // from: the height before a downward move, which never makes it smaller
+  const folded = px < OFFICE_FOLD, v = folded ? 0 : Math.min(Math.max(officeMax(), from), Math.round(px))
+  hero.folded = folded
+  hero.box.classList.toggle('folded', folded)
+  if (!folded) { hero.stage.classList.add('sized'); hero.stage.style.height = v + 'px' }
+  hero.grip.setAttribute('aria-valuemax', officeMax()); hero.grip.setAttribute('aria-valuenow', v)
+  hero.grip.setAttribute('aria-valuetext', folded ? '접힘' : v + 'px')
+  if (save) store.set('officeH', v)
+  if (!folded) heroLoop()   // the stage's ResizeObserver frames the room again (officeResize)
+}
+function gripInit(grip) {
+  const now = () => hero.folded ? 0 : hero.stage.clientHeight
+  let start = null
+  grip.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return
+    e.preventDefault(); start = { y: e.clientY, h: now() }
+    grip.setPointerCapture(e.pointerId); grip.classList.add('drag')
+  })
+  grip.addEventListener('pointermove', e => { if (start) setOfficeH(start.h + e.clientY - start.y, false, start.h) })
+  const end = () => { if (!start) return; start = null; grip.classList.remove('drag'); store.set('officeH', hero.folded ? 0 : now()) }
+  grip.addEventListener('pointerup', end); grip.addEventListener('pointercancel', end)
+  grip.addEventListener('keydown', e => {
+    const dir = { ArrowUp: -1, ArrowDown: 1 }[e.key]
+    if (!dir) return
+    e.preventDefault()
+    setOfficeH(hero.folded ? (dir > 0 ? OFFICE_OPEN : 0) : now() + dir * OFFICE_STEP, true, now())
+  })
+  const kept = store.get('officeH', null)
+  if (typeof kept === 'number') setOfficeH(kept, false)
 }
 
 function officeInit() {
@@ -167,6 +207,7 @@ function officeResize() {
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity
   for (const p of pts) { const q = p.clone().applyMatrix4(o.camera.matrixWorldInverse); x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y) }
   // frame the box itself (an off-centre frustum), widened on one axis to the canvas shape, with about 4% to spare
+  hero.natH = Math.ceil(w * (y1 - y0) / (x1 - x0))   // the height at which the room fills the width
   const asp = w / hh, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2
   let hw = (x1 - x0) / 2, hy = (y1 - y0) / 2
   if (hw / hy > asp) hy = hw / asp; else hw = hy * asp
@@ -344,7 +385,7 @@ function officeStep(dt, t) {
 
 function officeRender() {
   const o = hero?.o
-  if (!o || !hero.box.isConnected) return
+  if (!o || !hero.box.isConnected || hero.folded) return
   o.renderer.render(o.scene, o.camera)
   const w = hero.stage.clientWidth, hh = hero.stage.clientHeight
   const placed = [], figs = [...hero.figs.values()].map(f => {
@@ -369,7 +410,7 @@ function heroLoop() {
   if (!hero || !hero.ok || hero.raf) return
   const step = now => {
     hero.raf = 0
-    if (!hero.box.isConnected || cur || page !== 'agents' || document.hidden) { hero.last = 0; return }
+    if (!hero.box.isConnected || hero.folded || cur || page !== 'agents' || document.hidden) { hero.last = 0; return }
     const moving = !calm(), dt = hero.last ? Math.min(0.05, (now - hero.last) / 1000) : 0
     hero.last = moving ? now : 0
     try {

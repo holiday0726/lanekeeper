@@ -30,8 +30,16 @@ function subFold(a) {
     open ? subList(a) : null)
 }
 
+/* who started a session with `claude --bg` (server link_parents): the listed parent, or the starter that has closed */
+const hubRow = () => agents.find(a => a.lane === 'HUB')
+function upOf(a) {
+  const p = a.parent && a.parent !== hubRow()?.sessionId ? agents.find(b => b.sessionId === a.parent) : null
+  return p ? p.name || p.sessionId.slice(0, 8) : null
+}
+const goneEl = a => a.launcherGone ? h('span', { title: '이 세션을 띄운 세션이 목록에 없습니다' }, '띄운 세션 ', h('b', {}, a.launcher), ' 닫힘') : null
+
 function agentCard(a) {
-  const s = status(a)
+  const s = status(a), up = upOf(a)
   return h('article', { class: `agent ${s.key} g-${a.group || 'other'}` },
     h('a', { class: 'amain', href: '#/s/' + a.sessionId },
       h('div', { class: 'r1' }, h('span', { class: 'name' }, a.name || a.sessionId.slice(0, 8)), badge(a), stateEl(s)),
@@ -42,7 +50,8 @@ function agentCard(a) {
         h('span', {}, '시작 ', h('b', {}, ago(a.startedAt))),
         h('span', {}, kindLabel(a)),
         h('span', { class: 'mono', title: home(a.cwd) }, home(a.cwd).split('/').pop()),
-        a.tokens ? h('span', { title: tokTip(a.tokens) }, '토큰 ', h('b', {}, tok(a.tokens.total))) : null)),
+        a.tokens ? h('span', { title: tokTip(a.tokens) }, '토큰 ', h('b', {}, tok(a.tokens.total))) : null,
+        up ? h('span', { title: '이 세션을 띄운 세션' }, '상위 ', h('b', {}, up)) : null, goneEl(a))),
     subFold(a))
 }
 
@@ -73,7 +82,9 @@ function officeSlot(slot) {
 }
 
 /* session canvas: the hub in the middle, sessions at work on one side, the rest on the other, a line to each;
-   a solid line means they messaged in the last 24 hours, the number on it how many */
+   a solid line means they messaged in the last 24 hours, the number on it how many. A session another one started
+   with `claude --bg` sits under that one, indented away from the hub and joined to it instead of to the hub; a whole
+   branch goes to the busy side when anyone in it is busy */
 let agentView = store.get('agentView', 'canvas') === 'list' ? 'list' : 'canvas'
 let msgs24 = null
 const WIDE_CANVAS = 760   // px; matches the container query that sets the three columns
@@ -87,7 +98,7 @@ function nodeCard(a, hub) {
     h('span', { class: 'ndesc' }, a.detail || (hub ? '허브' : '하는 일 기록 없음')),
     h('span', { class: 'nmeta' }, h('span', {}, '활동 ', h('b', {}, ago(a.lastActivity))),
       a.tokens ? h('span', { title: tokTip(a.tokens) }, '토큰 ', h('b', {}, tok(a.tokens.total))) : null,
-      run ? h('span', {}, '서브에이전트 ', h('b', {}, run)) : null),
+      run ? h('span', {}, '서브에이전트 ', h('b', {}, run)) : null, goneEl(a)),
     s.key === 'blocked' ? h('span', { class: 'nflag ask' }, a.needs || '대기 중')
       : decs ? h('span', { class: 'nflag' }, `결정 대기 ${decs}`) : null)
 }
@@ -95,30 +106,41 @@ function canvasEl() {
   const hubName = msgs24?.hub
   const hubA = agents.find(a => a.lane === 'HUB') || agents.find(a => hubName && a.name === hubName)
   const rest = agents.filter(a => a !== hubA)
+  const ids = new Set(rest.map(a => a.sessionId)), kids = new Map()
+  const up = a => a.parent && ids.has(a.parent) ? a.parent : null   // the server keeps parents a tree
+  for (const a of rest) if (up(a)) kids.set(up(a), [...(kids.get(up(a)) || []), a])
+  const top = rest.filter(a => !up(a))
+  const busy = a => a.section === 'busy' || (kids.get(a.sessionId) || []).some(busy)
+  const tree = a => h('div', { class: 'tree' }, nodeCard(a),
+    kids.has(a.sessionId) ? h('div', { class: 'kids' }, kids.get(a.sessionId).map(tree)) : null)
   const svg = sv('svg', { class: 'links', 'aria-hidden': 'true' })
   const box = h('div', { class: 'canvas' + (hubA ? '' : ' nohub') }, svg,
-    h('div', { class: 'ccol left' }, rest.filter(a => a.section === 'busy').map(a => nodeCard(a))),
+    h('div', { class: 'ccol left' }, top.filter(busy).map(tree)),
     hubA ? h('div', { class: 'ccol mid' }, nodeCard(hubA, true)) : null,
-    h('div', { class: 'ccol right' }, rest.filter(a => a.section !== 'busy').map(a => nodeCard(a))))
-  const hubKey = hubA?.name
-  const count = name => {
-    const e = msgs24?.edges || [], c = (f, t) => e.find(x => x.from === f && x.to === t)?.count || 0
-    return { out: c(hubKey, name), back: c(name, hubKey) }
-  }
+    h('div', { class: 'ccol right' }, top.filter(a => !busy(a)).map(tree)))
+  const edges = msgs24?.edges || [], c = (f, t) => edges.find(x => x.from === f && x.to === t)?.count || 0
+  const count = (from, name) => ({ out: c(from, name), back: c(name, from) })
   box.drawLinks = () => {
-    if (!hubA || !box.isConnected) return
+    if (!box.isConnected) return
     const B = box.getBoundingClientRect(), wide = B.width >= WIDE_CANVAS
-    const hubEl = box.querySelector('.node.hub'), H = hubEl.getBoundingClientRect()
+    const hubEl = box.querySelector('.node.hub')
     const r = e => { const q = e.getBoundingClientRect(); return { l: q.left - B.left, r: q.right - B.left, t: q.top - B.top, b: q.bottom - B.top, w: q.width, h: q.height } }
-    const hb = r(hubEl), f1 = v => v.toFixed(1)
+    const hb = hubEl && r(hubEl), f1 = v => v.toFixed(1)
     svg.setAttribute('viewBox', `0 0 ${f1(B.width)} ${f1(B.height)}`)
     svg.setAttribute('width', f1(B.width)); svg.setAttribute('height', f1(B.height))
     const parts = []
     for (const el of box.querySelectorAll('.ccol:not(.mid) .node')) {
       const a = agents.find(x => x.sessionId === el.dataset.sid), q = r(el), left = el.closest('.left')
-      const { out, back } = count(a.name), n = out + back, y = q.t + q.h / 2
-      let d, lx, ly
-      if (wide) {   // side to side: hub edge to the card's inner edge
+      const pEl = el.parentElement.parentElement.closest('.tree')?.querySelector(':scope > .node')
+      const from = pEl ? agents.find(x => x.sessionId === pEl.dataset.sid)?.name : hubA?.name
+      if (!pEl && !hubA) continue
+      const { out, back } = count(from, a.name), n = out + back, y = q.t + q.h / 2
+      let d, lx, ly, anchor = left ? 'start' : 'end'
+      if (pEl) {    // from the parent's foot, down the indent beside the children, a turn into the card
+        const p = r(pEl), x0 = left ? p.r - 11 : p.l + 11, x1 = left ? q.r : q.l, k = Math.min(8, Math.abs(x0 - x1))
+        d = `M${f1(x0)},${f1(p.b)} V${f1(y - k)} Q${f1(x0)},${f1(y)} ${f1(x0 + (left ? -k : k))},${f1(y)} H${f1(x1)}`
+        lx = x0; ly = (p.b + y) / 2 + 4; anchor = 'middle'
+      } else if (wide) {   // side to side: hub edge to the card's inner edge
         const x0 = left ? hb.l : hb.r, y0 = hb.t + hb.h / 2, x1 = left ? q.r : q.l, mx = (x0 + x1) / 2
         d = `M${f1(x0)},${f1(y0)} C${f1(mx)},${f1(y0)} ${f1(mx)},${f1(y)} ${f1(x1)},${f1(y)}`; lx = x1 + (left ? 8 : -8); ly = y - 6
       } else {      // a spine down the middle gutter from the hub, a branch to each card
@@ -126,8 +148,8 @@ function canvasEl() {
         d = `M${f1(cx)},${f1(hb.b)} V${f1(y - k)} Q${f1(cx)},${f1(y)} ${f1(cx + (left ? -k : k))},${f1(y)} H${f1(x1)}`; lx = x1 + (left ? 4 : -4); ly = y - 6
       }
       parts.push(sv('path', { class: 'link' + (n ? ' on' : '') + (status(a).key === 'blocked' ? ' ask' : ''), d }))
-      if (n) parts.push(sv('text', { class: 'lnum', x: f1(lx), y: f1(ly), 'text-anchor': left ? 'start' : 'end' },
-        sv('title', {}, `허브에서 ${out}건, 허브로 ${back}건(24시간)`), n + '건'))
+      if (n) parts.push(sv('text', { class: 'lnum', x: f1(lx), y: f1(ly), 'text-anchor': anchor },
+        sv('title', {}, pEl ? `${from}에서 ${out}건, ${from}로 ${back}건(24시간)` : `허브에서 ${out}건, 허브로 ${back}건(24시간)`), n + '건'))
     }
     put(svg, parts)
   }

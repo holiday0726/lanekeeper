@@ -385,6 +385,56 @@ def test_messages():
     shutil.rmtree(mp)
 
 
+# who started whom: `claude --bg` calls in the starter's transcript, then a tree over the listed rows
+def test_parents():
+    def bash(ts, uid, cmd, out):
+        return (rec(type='assistant', timestamp=iso(ts), message={'id': 'm' + uid, 'content': [
+                    {'type': 'tool_use', 'id': uid, 'name': 'Bash', 'input': {'command': cmd}}]}) +
+                rec(type='user', timestamp=iso(ts + 1), message={'content': [
+                    {'type': 'tool_result', 'tool_use_id': uid, 'content': [{'type': 'text', 'text': out}]}]}))
+    bg = lambda job, name: f'backgrounded · {job} · {name} (idle — send a prompt to start)\n  claude attach {job}    open in this terminal'
+    mp = tempfile.mkdtemp()
+    def tr(sid, name, *lines, age=0):
+        os.makedirs(os.path.join(mp, '-w'), exist_ok=True)
+        path = os.path.join(mp, '-w', sid + '.jsonl')
+        with open(path, 'w', encoding='utf-8', newline='') as g:
+            g.write(rec(type='agent-name', agentName=name) + ''.join(lines))
+        os.utime(path, (NOW - age, NOW - age))
+    T = NOW - 600
+    tr('hubsid', 'hub',
+       bash(T, 'b1', 'cd ~/w && claude --bg --name task-a-supervisor --settings ~/hub/supervisor.settings.json', bg('aaaa0001', 'task-a-supervisor')),
+       bash(T + 5, 'b2', 'claude --bg --name gone-supervisor 2>&1 | grep -o "attach [0-9a-f]*"', 'attach dead0001'),   # only the hint kept
+       bash(T + 9, 'b3', 'grep -h backgrounded ~/.claude/projects/*/*.jsonl', bg('cccc0004', 'x')),   # output of another command: not a start
+       bash(T + 9, 'b4', 'claude agents --json', 'attach cccc0004'))
+    tr('aaaa0001-0000', 'task-a-supervisor',
+       bash(T + 20, 'b5', 'for n in w1 w2; do timeout 60 claude --bg --name $n 2>&1 | head -1; done', bg('bbbb0001', 'w1') + '\n' + bg('bbbb0002', 'w2')))
+    tr('bbbb0001-0000', 'w1', bash(T + 30, 'b6', 'claude --bg --name w1-sub', bg('eeee0001', 'w1-sub')))   # depth 3
+    tr('dead0001-0000', 'gone-supervisor', bash(T + 40, 'b7', 'claude --bg --name orphan', bg('ffff0001', 'orphan')))
+    tr('c0de0001-0000', 'p', bash(T + 50, 'b8', 'claude --bg --name q', bg('c0de0002', 'q')))
+    tr('c0de0002-0000', 'q', bash(T + 51, 'b9', 'claude --resume x --bg --name p', 'stopped c0de0001\nnote: started a copy as c0de0001'))
+    tr('oldsid', 'old', bash(T - 90 * 86400, 'b10', 'claude --bg --name w9', bg('9999aaaa', 'w9')), age=90 * 86400)   # outside the window
+    found = server.launches(NOW * 1000 - 86400000, root=mp)
+    assert found['aaaa0001'] == ('hubsid', 'hub') and found['dead0001'] == ('hubsid', 'hub') and 'cccc0004' not in found
+    assert found['bbbb0001'][0] == found['bbbb0002'][0] == 'aaaa0001-0000' and '9999aaaa' not in found
+    assert found['c0de0001'] == ('c0de0002-0000', 'q')   # `started a copy as`
+
+    row = lambda name, job: dict(name=name, id=job, sessionId=(job + '-0000') if job else name + 'sid')
+    rows = [row('hub', None), row('task-a-supervisor', 'aaaa0001'), row('w1', 'bbbb0001'), row('w2', 'bbbb0002'),
+            row('w1-sub', 'eeee0001'), row('orphan', 'ffff0001'), row('alone', '12345678'), row('p', 'c0de0001'), row('q', 'c0de0002'),
+            dict(name='codex x', id='bbbb0001', sessionId='codexsid', engine='codex')]
+    rows[0]['sessionId'] = 'hubsid'
+    by = {a['name']: a for a in server.link_parents(rows, found)}
+    assert by['task-a-supervisor']['parent'] == 'hubsid' and by['task-a-supervisor']['launcher'] == 'hub'
+    assert by['w1']['parent'] == by['w2']['parent'] == 'aaaa0001-0000'
+    assert by['w1-sub']['parent'] == 'bbbb0001-0000' and by['w1-sub']['launcherGone'] is False   # depth 3
+    # the one that started it is closed: up past it to the hub, and its name is kept for the card
+    assert by['orphan']['parent'] == 'hubsid' and by['orphan']['launcher'] == 'gone-supervisor' and by['orphan']['launcherGone'] is True
+    assert 'parent' not in by['alone'] and 'launcher' not in by['alone'] and 'parent' not in by['hub']   # no record: under the hub as before
+    assert ('parent' in by['p']) != ('parent' in by['q']), '순환은 한쪽을 끊는다'
+    assert 'parent' not in by['codex x']
+    shutil.rmtree(mp)
+
+
 # dev occupancy: the hub's dev-occupancy.json, missing / broken / stale / ok
 def test_dev_occupancy():
     dp = tempfile.mkdtemp()

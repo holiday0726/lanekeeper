@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-A new skill `/lanekeeper:update` gets a new version and brings an existing hub folder up to the new templates, so you no longer compare files with `templates/hub/` by hand.
+A new skill `/lanekeeper:update` gets a new version and brings an existing hub folder up to the new templates, so you no longer compare files with `templates/hub/` by hand. The dashboard now shows which session started which, and the 3D office can be resized by dragging the line under it.
 
 The skill itself comes with this version. The first time, run `claude plugin marketplace update lanekeeper` and `claude plugin update lanekeeper@lanekeeper`, type `/reload-plugins`, and then call `/lanekeeper:update` in the hub session ([Updating](https://github.com/holiday0726/lanekeeper/blob/main/README.md#updating), [한국어](https://github.com/holiday0726/lanekeeper/blob/main/README.ko.md#업데이트)).
 
@@ -17,6 +17,8 @@ The skill itself comes with this version. The first time, run `claude plugin mar
 ### Changed
 
 - README "Manual install" and "Updating": a local marketplace also runs from a copy under `~/.claude/plugins/cache/`, so after `git pull` run the two update commands as well. Before, it said `git pull` and `/reload-plugins` were enough.
+- Dashboard, Agents tab: a session started by another session with `claude --bg` sits under it in the flow chart, indented away from the hub and joined to it instead of to the hub, so the hub, a supervisor and the sessions the supervisor started show as three levels (and deeper). A branch goes to the busy side when anyone in it is busy. List cards say `상위 <name>` (parent), and a card whose starter has closed says `띄운 세션 <name> 닫힘` (started by, closed). The link comes from the starter's own transcript: a Bash call whose command runs `claude --bg` and the job id in that call's output (`backgrounded · <id>`, `claude attach <id>` or `started a copy as <id>`). Starters are matched by session id only, never by name, so nothing is guessed. Sessions without such a record stay right under the hub, as before. The first read of all transcripts runs in the background, so the hierarchy shows from the next refresh.
+- Dashboard, 3D office: drag the line under the office (mouse or touch), or focus it and press the up and down arrows, to change the office height. Below 120px it folds away and stops drawing, and the line stays to pull it back. The height is kept in the browser and the room is framed again at each size. It grows up to 85% of the window or the height where the room fills the width, whichever is smaller.
 - `/lanekeeper:setup` also keeps a copy of each file it copies in `<hub folder>/.lanekeeper/base/`. The update compares against these copies. A hub folder made with 0.6.0 or earlier has none, so its first update shows the full difference between your files and the new templates.
 
 ## 0.6.0

@@ -423,6 +423,11 @@ def agents():
             if a.get('id'):
                 a.update(job_state(a['id']))
             a['tokens'] = claude_tokens(p)
+        try:   # who started whom; trouble here must not empty the list either
+            starts = [a['startedAt'] for a in rows if isinstance(a.get('startedAt'), (int, float))]
+            link_parents(rows, refresh_launches(min(starts) - 60000 if starts else 0))
+        except Exception as e:
+            print('parents:', e, flush=True)
         try:
             rows += codex_rows()
         except Exception as e:   # codex trouble must never take the Claude list down with it
@@ -702,8 +707,13 @@ def ms_or_none(ts):
         return None
 
 
-# lines worth parsing: usage, SendMessage calls, their results and peer receipts (msg_id), the session name
-SCAN_KEYS = (b'"usage"', b'"SendMessage"', b'msg_id', b'cross-session-message', b'"agent-name"')
+# lines worth parsing: usage, SendMessage calls, their results and peer receipts (msg_id), the session name,
+# Bash calls that start a background session and their output
+SCAN_KEYS = (b'"usage"', b'"SendMessage"', b'msg_id', b'cross-session-message', b'"agent-name"', b'--bg', b'backgrounded', b'attach ', b'copy as ')
+BG_CMD = re.compile(r'\bclaude\s(?:[^\n;&|]*\s)?--bg\b')   # a Bash command that runs `claude --bg`
+# the new job id in its output: `backgrounded · <id> · <name>`, the `claude attach <id>` hint (often all that is kept
+# by `| grep attach`), or `started a copy as <id>` when an existing session with other flags was copied
+BG_OUT = re.compile(r'(?:^backgrounded\W+|\battach\s+|\bcopy as\s+)([0-9a-f]{8})\b', re.M)
 SCAN_SKIP = (b'{"type":"api-request', b'{"type":"queue-operation')   # request copies and queue echoes of the same messages
 USAGE_KEYS = ('input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens')
 
@@ -742,6 +752,9 @@ def scan_record(s, d):
             # every content block of one API message repeats its usage: keep one per id
             s['usage'][m['id']] = [int(m['usage'].get(k) or 0) for k in USAGE_KEYS]
         for b in m.get('content') or []:
+            if isinstance(b, dict) and b.get('type') == 'tool_use' and b.get('name') == 'Bash' \
+                    and BG_CMD.search(str((b.get('input') or {}).get('command') or '')):
+                s['bg'].add(b.get('id'))
             if isinstance(b, dict) and b.get('type') == 'tool_use' and b.get('name') == 'SendMessage':
                 inp = b.get('input') or {}
                 to = re.sub(r' \[[0-9a-f]{4,}\]$', '', str(inp.get('to') or ''))   # 'name [ref]' when names collide
@@ -755,6 +768,9 @@ def scan_record(s, d):
                 x = s['sends'].get(b.get('tool_use_id')) if isinstance(b, dict) else None
                 if x:
                     x['ok'], x['msg_id'] = send_result(d.get('toolUseResult'), b.get('content'))
+                if isinstance(b, dict) and b.get('tool_use_id') in s['bg']:   # only the output of that very call counts
+                    for job in BG_OUT.findall(text_of(b.get('content'))):
+                        s['launched'][job] = ms_or_none(d.get('timestamp')) or 0
         else:
             peer_receipt(s, d.get('origin'), text_of(c), d.get('timestamp'))
     elif t == 'attachment':
@@ -772,7 +788,7 @@ def claude_scan(path):
         s = _claude.get(path)
         size = os.path.getsize(path)
         if not s or size < s['pos']:
-            s = _claude[path] = {'pos': 0, 'name': '', 'sends': {}, 'recv': [], 'usage': {}}
+            s = _claude[path] = {'pos': 0, 'name': '', 'sends': {}, 'recv': [], 'usage': {}, 'bg': set(), 'launched': {}}
         with open(path, 'rb') as f:
             f.seek(s['pos'])
             data = f.read(size - s['pos'])
@@ -786,7 +802,70 @@ def claude_scan(path):
                 continue
         s['pos'] += end
         return {'name': s['name'], 'sends': [dict(x) for x in s['sends'].values()], 'recv': list(s['recv']),
-                'usage': list(s['usage'].values())}
+                'usage': list(s['usage'].values()), 'launched': dict(s['launched'])}
+
+
+def launches(since, root=PROJECTS):
+    """{job id: (sessionId, name) of the session that started it} from `claude --bg` calls in transcripts touched
+    since `since` (ms). A later start of the same id (a resume) wins."""
+    found = []
+    for p in glob.glob(os.path.join(root, '*', '*.jsonl')):
+        try:
+            if os.path.getmtime(p) * 1000 < since:
+                continue
+            s, sid = claude_scan(p), os.path.basename(p)[:-len('.jsonl')]
+            found += [(t, job, sid, s['name']) for job, t in s['launched'].items()]
+        except OSError:
+            continue
+    return {job: (sid, name) for t, job, sid, name in sorted(found)}
+
+
+_launch = {'found': {}, 'busy': False}
+
+
+def refresh_launches(since):
+    """The last launches() answer, and a new one started in the background: the first read of every transcript since
+    the oldest listed session can take seconds, and the list must not wait for it. Parents show one refresh later."""
+    def run():
+        try:
+            _launch['found'] = launches(since)
+        except Exception as e:
+            print('parents:', e, flush=True)
+        finally:
+            _launch['busy'] = False
+    if not _launch['busy']:
+        _launch['busy'] = True
+        threading.Thread(target=run, daemon=True).start()
+    return _launch['found']
+
+
+def link_parents(rows, found):
+    """Give each row started by `claude --bg` its parent: a['parent'] is the sessionId of the listed session that started
+    it, or of the nearest listed one above it when that one is closed. a['launcher'] names the direct starter and
+    a['launcherGone'] says it is not listed. Starters are matched by sessionId only, never by name; the closed ones above
+    are followed by the job id their sessionId starts with. A loop is cut, so parents always form a tree."""
+    by_sid = {a['sessionId']: a for a in rows if a.get('sessionId') and a.get('engine') != 'codex'}
+    for a in by_sid.values():
+        if a.get('id') not in found:
+            continue
+        sid, name = found[a['id']]
+        a['launcher'] = (by_sid[sid].get('name') if sid in by_sid else name) or sid[:8]
+        a['launcherGone'] = sid not in by_sid
+        seen = {a['id']}
+        while sid not in by_sid and sid[:8] in found and sid[:8] not in seen:   # closed: go up to whoever started it
+            seen.add(sid[:8])
+            sid = found[sid[:8]][0]
+        if sid in by_sid and by_sid[sid] is not a:
+            a['parent'] = sid
+    for a in by_sid.values():   # cut loops: walk up from each row and drop the link that closes a circle
+        chain, b = [a], a
+        while b.get('parent') in by_sid:
+            b = by_sid[b['parent']]
+            if any(b is c for c in chain):
+                chain[-1].pop('parent')
+                break
+            chain.append(b)
+    return rows
 
 
 KINDS = {'배정': 'assign', '보고': 'report', '알림': 'notice'}
