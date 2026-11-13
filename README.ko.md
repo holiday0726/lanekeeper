@@ -21,8 +21,8 @@ Claude Code 세션 하나를 허브로 두고, 허브가 다른 세션들에 일
 | 허브 규칙 틀 | `templates/hub/` | 허브의 역할과 스킬 쓰는 때(`CLAUDE.md`), 세션 사이 약속과 보고 형식(`COORDINATION.md`), 현황판(`STATUS.md`)과 빈 데이터 파일 셋 |
 | 대시보드 | `dashboard/` | 떠 있는 세션, 사용자 결정, 현황, 세션 사이 메시지를 보여 주는 읽기 전용 웹 화면. Python 표준 라이브러리만 씁니다 |
 | 훅 | `hooks/` | 허브 폴더에서 세션을 열면 대시보드를 띄우고, 세션이 허브 폴더나 다른 레인 경로에 쓰지 못하게 막습니다 |
-| 스킬 | `skills/` | 설치 마무리 `setup` |
-| 설치 스크립트 | `scripts/` | `setup` 스킬이 부르는 `setup_hub.py`. 허브 폴더 복사와 설정 합치기를 맡습니다 |
+| 스킬 | `skills/` | 설치 마무리 `setup`, 새 판 받기와 허브 폴더 맞추기 `update` |
+| 설치 스크립트 | `scripts/` | `setup` 스킬이 부르는 `setup_hub.py`(허브 폴더 복사와 설정 합치기), `update` 스킬이 부르는 `update_hub.py`(허브 폴더를 새 틀에 맞추기) |
 | 설정 예시 | `examples/` | 허브와 슈퍼바이저 세션의 권한, 기본 모델 같은 설정 견본 |
 
 ## 배정에서 보고까지
@@ -88,7 +88,27 @@ claude
 
 ## 업데이트
 
-이 마켓플레이스처럼 GitHub 에서 추가한 마켓플레이스는 Claude Code 의 백그라운드 자동 업데이트가 기본으로 꺼져 있으므로, 새 판은 터미널에서 받습니다.
+허브 세션에서 업데이트 스킬을 부릅니다.
+
+```
+/lanekeeper:update
+```
+
+스킬은 이 순서로 진행합니다.
+
+1. 새 판을 받고 전 판과 새 판을 알려 줍니다(아래 두 명령). 손으로 설치했으면 그 폴더에서 `git pull` 할지 묻습니다.
+2. 허브 폴더를 새 판의 틀과 비교해 미리 보여 주고, CHANGELOG 에서 그사이 바뀐 것을 요약합니다. 이 단계는 아무것도 바꾸지 않습니다.
+3. 반영하겠다고 답하면 `<허브 폴더>/.lanekeeper/backup-<시각>/` 에 백업한 뒤 바꿉니다.
+   - 규칙 문서(`CLAUDE.md`, `COORDINATION.md`)와 설정(`.claude/settings.json`, `supervisor.settings.json`): 사용자가 고친 줄은 두고 틀이 바뀐 곳만 넣습니다. 같은 곳을 둘 다 고쳤으면 손대지 않고 무엇을 넣을지 제안합니다. 설정 JSON 은 새로 생긴 최상위 키만 더하고 권한 줄 같은 안쪽 값은 보여 주기만 합니다.
+   - 현황판, 명단, 결정, dev 점유(`STATUS.md`, `agents.json`, `decisions.json`, `dev-occupancy.json`): 없을 때만 만들고 있는 파일은 건드리지 않습니다.
+   - 사용자 설정(`~/.claude/settings.json`): `/lanekeeper:setup` 처럼 없는 키만 더합니다.
+4. 되돌리는 명령을 알려 줍니다. `update_hub.py <허브 폴더> --restore <백업 폴더>` 가 허브 폴더를 반영 전으로 돌립니다.
+
+비교 기준은 `/lanekeeper:setup` 이나 지난 업데이트가 `<허브 폴더>/.lanekeeper/base/` 에 남긴 틀 사본입니다.
+0.6.0 까지 만든 허브에는 이 사본이 없어서 첫 업데이트는 허브 파일과 새 틀의 차이를 통째로 보여 주고, 무엇을 넣을지 사용자가 고릅니다. 그다음부터는 틀이 바뀐 곳만 보입니다.
+
+0.6.0 에는 이 스킬이 없습니다. 처음 한 번은 터미널에서 새 판을 받고, 세션에서 `/reload-plugins` 를 입력한 뒤 부릅니다.
+이 마켓플레이스처럼 GitHub 에서 추가한 마켓플레이스는 Claude Code 의 백그라운드 자동 업데이트가 기본으로 꺼져 있습니다.
 
 ```sh
 claude plugin marketplace update lanekeeper
@@ -100,9 +120,9 @@ claude plugin update lanekeeper@lanekeeper
 
 이미 떠 있는 대시보드는 옛 판 화면을 계속 보여 줍니다. 훅은 서버가 없을 때만 띄우기 때문입니다. 로그 첫 줄의 pid 로 서버를 끄고([대시보드](#대시보드) 참고) 허브 세션을 다시 엽니다. 0.5.0 부터는 떠 있는 서버가 다른 판이면 세션 시작 메시지가 그렇게 알려 줍니다.
 
-업데이트는 `~/.claude/plugins/cache/` 아래 플러그인 사본만 바꿉니다. 아래는 그대로 남습니다.
+위 두 명령과 자동 업데이트는 `~/.claude/plugins/cache/` 아래 플러그인 사본만 바꿉니다. 아래는 그대로 남습니다.
 
-- 허브 폴더: `/lanekeeper:setup` 이 복사한 규칙 문서와 데이터 파일, `.claude/settings.json`, `supervisor.settings.json`. 설치 스킬은 있는 파일을 덮지 않으므로 새 판에서 `templates/hub/` 가 바뀌어도 이미 만든 허브 폴더에는 들어가지 않습니다. [CHANGELOG](CHANGELOG.md) 에 틀 변경이 적혀 있으면 `templates/hub/` 와 직접 비교합니다.
+- 허브 폴더: `/lanekeeper:setup` 이 복사한 규칙 문서와 데이터 파일, `.claude/settings.json`, `supervisor.settings.json`. 새 판의 틀 변경은 `/lanekeeper:update` 에서 반영하겠다고 답할 때만 들어갑니다.
 - 사용자 설정(`~/.claude/settings.json`)과 플러그인 이름 아래 저장된 플러그인 설정값(`python`, `hub_dir` 등).
 - `~/.claude/plugins/data/lanekeeper-lanekeeper/` 의 대시보드 로그.
 
@@ -120,7 +140,7 @@ claude plugin update lanekeeper@lanekeeper
 git clone https://github.com/holiday0726/lanekeeper.git ~/lanekeeper
 claude plugin marketplace add ~/lanekeeper      # Windows: C:/Users/<나>/lanekeeper
 claude plugin install lanekeeper@lanekeeper
-claude plugin details lanekeeper@lanekeeper     # Skills (1), Hooks (2) 가 보이면 설치된 것
+claude plugin details lanekeeper@lanekeeper     # Skills (2), Hooks (2) 가 보이면 설치된 것
 ```
 
 플러그인은 그 폴더를 그대로 읽으니 옮기지 않습니다. 새 판은 그 폴더에서 `git pull` 한 뒤 `/reload-plugins` 를 입력합니다. 인터넷이 없는 PC 에는 `git bundle create ../lanekeeper.bundle HEAD main` 으로 만든 묶음을 옮겨 clone 합니다.
@@ -241,6 +261,7 @@ $env:HUB_DIR = "C:\Users\<나>\hub"; $env:PORT = "4990"; py -3 C:\Users\<나>\la
 | 스킬 | 부르는 법 | 쓰임 |
 |---|---|---|
 | setup | `/lanekeeper:setup [허브 폴더]` | 설치를 마무리합니다. 허브 폴더를 만들고 사용자 설정과 플러그인 설정값을 채웁니다. [빠른 시작](#빠른-시작) 참고 |
+| update | `/lanekeeper:update [허브 폴더]` | 새 판을 받고 허브 폴더를 새 틀에 맞춥니다. 미리 보기가 기본이고 확인 뒤 백업하고 반영합니다. [업데이트](#업데이트) 참고 |
 
 ## 저장소 구조
 
@@ -250,17 +271,17 @@ dashboard/        server.py, index.html, app.css, js/, test_server.py, vendor/
 docs/             README 그림(images/en, images/ko)과 그림 원본(diagrams/en, diagrams/ko)
 examples/         hub.settings.json, supervisor.settings.json, user.settings.json
 hooks/            hooks.json, open_dashboard.py, lane_guard.py, hubpath.py
-scripts/          setup_hub.py, lane_deny.py
-skills/           setup/
+scripts/          setup_hub.py, update_hub.py, lane_deny.py
+skills/           setup/, update/
 templates/hub/    CLAUDE.md, COORDINATION.md, STATUS.md, agents.json, decisions.json, dev-occupancy.json
-tests/            훅과 설치 스크립트 시험
+tests/            훅과 설치, 업데이트 스크립트 시험
 ```
 
 ## 시험 돌리기
 
 ```sh
 python3 -m pip install pytest
-python3 -m pytest -q                    # 훅, 설치 스크립트, 대시보드 서버(tests/, dashboard/)
+python3 -m pytest -q                    # 훅, 설치와 업데이트 스크립트, 대시보드 서버(tests/, dashboard/)
 claude plugin validate --strict .       # 매니페스트 검사
 ```
 

@@ -60,6 +60,7 @@ Windows 의 `python` 이 Microsoft Store 설치 안내만 띄우고 끝나는 �
 
 - 허브 폴더를 만들고 `templates/hub/*` 와 `examples/hub.settings.json`(`.claude/settings.json` 으로), `examples/supervisor.settings.json` 을 복사한다.
   있는 파일은 덮지 않는다.
+  복사한 파일은 `.lanekeeper/base/` 에도 남긴다. 다음 판에서 `/lanekeeper:update` 가 비교할 기준본이다.
 - 사용자 설정 `settings.json` 에 `examples/user.settings.json` 의 키(`crossSessionInbound`) 가 없으면 더한다.
   `model` 같은 다른 설정은 건드리지 않는다.
   있는 값은 그대로 두고, 쓰기 전에 `settings.json.bak-<시각>` 으로 백업한다.
@@ -132,6 +133,8 @@ claude plugin install addy-skills --marketplace holiday0726/Addy-skills
    대시보드는 `agents.json` 의 `hub` 세션을 허브로 본다.
 4. 손으로 채울 자리: `agents.json` 의 `lanes`(레인마다 소유 경로의 절대 경로 목록), `.claude/settings.json` 의 `<레인 저장소>` 자리, `supervisor.settings.json` 의 `autoMode.allow`, `CLAUDE.md` 와 `COORDINATION.md` 의 `<...>` 자리.
    `lanes` 를 채운 뒤 `<PY> "${CLAUDE_PLUGIN_ROOT}/scripts/lane_deny.py" "<허브 폴더>"` 가 찍는 줄을 `.claude/settings.json` 의 `permissions.deny` 에 넣으면 허브 세션도 레인 저장소를 고치지 못한다.
+
+5. 새 판을 받을 때는 허브 세션에서 `/lanekeeper:update` 를 부른다.
 
 3단계에서 `kept` 가 나온 키와 4단계에서 바꾸지 않은 값이 있으면 여기서 다시 짚는다.
 

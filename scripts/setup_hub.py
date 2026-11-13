@@ -3,6 +3,7 @@
 
 /lanekeeper:setup 스킬이 부른다. 다시 돌려도 결과가 같다.
 1. 허브 폴더를 만들고 templates/hub/* 와 설정 예시 둘을 복사한다. 있는 파일은 덮지 않는다.
+   복사한 파일은 <허브>/.lanekeeper/base/ 에도 남긴다. update_hub.py 가 다음 판과 비교할 기준본이다.
 2. 사용자 설정(<설정 폴더>/settings.json)에 examples/user.settings.json 의 키 중 없는 것만 더한다. 쓰기 전에 백업한다.
 3. agents.json 의 resident.hub.cwd 가 비어 있으면 허브 폴더 경로를 넣는다.
 설정 폴더는 --config-dir, CLAUDE_CONFIG_DIR, ~/.claude 순으로 정한다.
@@ -21,6 +22,8 @@ if sys.version_info < (3, 8):
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, 'hooks'))
 from hubpath import NT, native  # noqa: E402  훅과 같은 규칙으로 ~ 와 /c/x 꼴을 푼다
+
+BASE = '.lanekeeper/base'  # 허브 안에 남기는 기준본 폴더
 
 
 def slash(p):
@@ -42,24 +45,43 @@ def say(tag, msg):
     print('%-8s %s' % (tag, msg))
 
 
+def sources():
+    """허브에 복사하는 (원본 절대 경로, 허브 안 상대 경로 '/' 꼴) 목록."""
+    tpl = os.path.join(REPO, 'templates', 'hub')
+    pairs = [(os.path.join(tpl, n), n) for n in sorted(os.listdir(tpl))]
+    return pairs + [(os.path.join(REPO, 'examples', 'hub.settings.json'), '.claude/settings.json'),
+                    (os.path.join(REPO, 'examples', 'supervisor.settings.json'), 'supervisor.settings.json')]
+
+
+def at(root, rel):
+    return os.path.join(root, *rel.split('/'))
+
+
+def put(src, dst):
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    shutil.copyfile(src, dst)
+
+
 def copy_files(hub):
     changed = 0
-    tpl = os.path.join(REPO, 'templates', 'hub')
-    pairs = [(os.path.join(tpl, n), os.path.join(hub, n)) for n in sorted(os.listdir(tpl))]
-    pairs += [(os.path.join(REPO, 'examples', 'hub.settings.json'), os.path.join(hub, '.claude', 'settings.json')),
-              (os.path.join(REPO, 'examples', 'supervisor.settings.json'), os.path.join(hub, 'supervisor.settings.json'))]
-    for src, dst in pairs:
+    for src, rel in sources():
+        dst = at(hub, rel)
         if os.path.exists(dst):
             say('exists', slash(dst))
             continue
-        os.makedirs(os.path.dirname(dst), exist_ok=True)
-        shutil.copyfile(src, dst)
+        put(src, dst)
+        put(src, at(hub, BASE + '/' + rel))
         say('created', slash(dst))
         changed += 1
     return changed
 
 
-def merge_user_settings(config_dir):
+def config_dir(arg):
+    return os.path.abspath(os.path.expanduser(arg or os.environ.get('CLAUDE_CONFIG_DIR') or os.path.join('~', '.claude')))
+
+
+def merge_user_settings(config_dir, dry=False):
+    """examples/user.settings.json 의 키 중 없는 것만 더한다. dry 면 무엇을 더할지만 찍는다."""
     path = os.path.join(config_dir, 'settings.json')
     want = load(os.path.join(REPO, 'examples', 'user.settings.json'))
     cur = load(path) if os.path.exists(path) else {}  # JSON 이 깨져 있으면 여기서 멈추고 아무것도 쓰지 않는다
@@ -69,6 +91,10 @@ def merge_user_settings(config_dir):
     for k in want:
         if k in cur:
             say('kept', '%s: %s = %s' % (slash(path), k, json.dumps(cur[k], ensure_ascii=False)))
+    if dry:
+        for k in add:
+            say('merge', '%s: %s = %s' % (slash(path), k, json.dumps(want[k], ensure_ascii=False)))
+        return len(add)
     if not add:
         return 0
     if os.path.exists(path):
@@ -104,11 +130,9 @@ def main(argv=None):
     a = ap.parse_args(argv)
     sys.stdout.reconfigure(errors='backslashreplace')  # Windows cp949 콘솔에서 못 찍는 글자로 죽지 않게
     hub = os.path.abspath(native(a.hub))
-    config_dir = os.path.abspath(os.path.expanduser(
-        a.config_dir or os.environ.get('CLAUDE_CONFIG_DIR') or os.path.join('~', '.claude')))
     if os.path.exists(hub) and not os.path.isdir(hub):
         sys.exit('허브 경로가 폴더가 아닙니다: ' + hub)
-    changed = merge_user_settings(config_dir)  # 사용자 설정이 깨져 있으면 허브 폴더도 건드리기 전에 멈춘다
+    changed = merge_user_settings(config_dir(a.config_dir))  # 사용자 설정이 깨져 있으면 허브 폴더도 건드리기 전에 멈춘다
     changed += copy_files(hub) + fill_roster(hub)
     print(json.dumps({'hub_dir': slash(hub), 'python': slash(sys.executable), 'changed': changed}))
 

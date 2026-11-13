@@ -23,8 +23,8 @@ The dashboard is in Korean, so its screenshots have Korean labels.
 | Hub rule templates | `templates/hub/` | The hub role and when to use which skill (`CLAUDE.md`), agreements between sessions and the report format (`COORDINATION.md`), a status board (`STATUS.md`) and three empty data files |
 | Dashboard | `dashboard/` | A web page that only reads. It shows running sessions, user decisions, status and messages between sessions. It uses only the Python standard library |
 | Hooks | `hooks/` | Start the dashboard when a session opens in the hub folder, and stop a session from writing to the hub folder or to another lane's paths |
-| Skill | `skills/` | `setup` to finish the install |
-| Install script | `scripts/` | `setup_hub.py`, called by the `setup` skill. It copies the hub folder and merges settings |
+| Skills | `skills/` | `setup` to finish the install, `update` to get a new version and bring the hub folder up to date |
+| Install scripts | `scripts/` | `setup_hub.py`, called by the `setup` skill, copies the hub folder and merges settings. `update_hub.py`, called by the `update` skill, brings the hub folder up to the new templates |
 | Settings examples | `examples/` | Sample settings for the hub and supervisor sessions, such as permissions and the default model |
 
 ## From assignment to report
@@ -92,7 +92,27 @@ To get a new version, see [Updating](#updating).
 
 ## Updating
 
-For a marketplace added from GitHub, like this one, Claude Code's background auto-update is off by default, so get a new version in a terminal.
+Call the update skill in the hub session.
+
+```
+/lanekeeper:update
+```
+
+The skill goes through these steps.
+
+1. It gets the new version (the two commands below) and tells you the old and new version numbers. For a manual install it asks before running `git pull` in that folder.
+2. It compares the hub folder with the new templates, shows what would change, and sums up the CHANGELOG since your version. This step changes nothing.
+3. If you say yes, it backs up to `<hub folder>/.lanekeeper/backup-<time>/` and then makes the changes.
+   - Rule documents (`CLAUDE.md`, `COORDINATION.md`) and settings (`.claude/settings.json`, `supervisor.settings.json`): your lines stay and only what changed in the templates goes in. Where you and the template changed the same place, the file is left alone and the skill suggests what to add. For settings JSON it adds only new top level keys and only shows nested changes such as new permission lines.
+   - Status board, roster, decisions and dev occupancy (`STATUS.md`, `agents.json`, `decisions.json`, `dev-occupancy.json`): created only when missing, never changed.
+   - User settings (`~/.claude/settings.json`): missing keys are added, as `/lanekeeper:setup` does.
+4. It tells you how to undo: `update_hub.py <hub folder> --restore <backup folder>` puts the hub folder back as it was.
+
+It compares against the template copies that `/lanekeeper:setup` or the last update left in `<hub folder>/.lanekeeper/base/`.
+A hub folder made with 0.6.0 or earlier has no such copies, so the first update shows the full difference between your files and the new templates and you pick what to take. After that only template changes show up.
+
+0.6.0 does not have this skill. The first time, get the new version in a terminal, type `/reload-plugins` in the session, and then call it.
+For a marketplace added from GitHub, like this one, Claude Code's background auto-update is off by default.
 
 ```sh
 claude plugin marketplace update lanekeeper
@@ -104,9 +124,9 @@ To let Claude Code do this in the background, open `/plugin` in a session, go to
 
 A dashboard that is already running keeps showing the old version, because the hook only starts a server when none is running. Stop it with the pid on the first line of its log (see [Dashboard](#dashboard)), then open the hub session again. From 0.5.0 the session start message says so when the running server is from another version. That message points to the Korean heading of this section, "업데이트".
 
-An update replaces only the plugin's own copy under `~/.claude/plugins/cache/`. These stay as they are:
+The two commands above and auto-update replace only the plugin's own copy under `~/.claude/plugins/cache/`. These stay as they are:
 
-- The hub folder: the rule documents and data files that `/lanekeeper:setup` copied, `.claude/settings.json` and `supervisor.settings.json`. Because setup never overwrites them, changes to `templates/hub/` in a new version do not reach an existing hub folder. When the [CHANGELOG](CHANGELOG.md) mentions a template change, compare your files with `templates/hub/` yourself.
+- The hub folder: the rule documents and data files that `/lanekeeper:setup` copied, `.claude/settings.json` and `supervisor.settings.json`. Template changes in a new version go in only when you say yes in `/lanekeeper:update`.
 - Your user settings (`~/.claude/settings.json`) and the plugin settings (`python`, `hub_dir` and the rest), which are stored under the plugin name.
 - The dashboard logs in `~/.claude/plugins/data/lanekeeper-lanekeeper/`.
 
@@ -124,7 +144,7 @@ To change the code, clone the repository and add the folder as a local marketpla
 git clone https://github.com/holiday0726/lanekeeper.git ~/lanekeeper
 claude plugin marketplace add ~/lanekeeper      # Windows: C:/Users/<you>/lanekeeper
 claude plugin install lanekeeper@lanekeeper
-claude plugin details lanekeeper@lanekeeper     # installed if it shows Skills (1), Hooks (2)
+claude plugin details lanekeeper@lanekeeper     # installed if it shows Skills (2), Hooks (2)
 ```
 
 The plugin reads that folder in place, so do not move it. To update, run `git pull` there and type `/reload-plugins`. For a PC without internet access, carry over `git bundle create ../lanekeeper.bundle HEAD main` and clone the bundle there.
@@ -245,6 +265,7 @@ Do not bind it to `0.0.0.0` or put it behind a public tunnel service. Anyone who
 | Skill | How to call | Use |
 |---|---|---|
 | setup | `/lanekeeper:setup [hub folder]` | Finishes the install. Creates the hub folder and fills in user settings and plugin settings. See [Quick start](#quick-start) |
+| update | `/lanekeeper:update [hub folder]` | Gets a new version and brings the hub folder up to the new templates. It previews first and backs up before it changes anything. See [Updating](#updating) |
 
 ## Repository layout
 
@@ -254,17 +275,17 @@ dashboard/        server.py, index.html, app.css, js/, test_server.py, vendor/
 docs/             README images (images/en, images/ko) and their sources (diagrams/en, diagrams/ko)
 examples/         hub.settings.json, supervisor.settings.json, user.settings.json
 hooks/            hooks.json, open_dashboard.py, lane_guard.py, hubpath.py
-scripts/          setup_hub.py, lane_deny.py
-skills/           setup/
+scripts/          setup_hub.py, update_hub.py, lane_deny.py
+skills/           setup/, update/
 templates/hub/    CLAUDE.md, COORDINATION.md, STATUS.md, agents.json, decisions.json, dev-occupancy.json
-tests/            tests for the hooks and the install script
+tests/            tests for the hooks and the install and update scripts
 ```
 
 ## Running the tests
 
 ```sh
 python3 -m pip install pytest
-python3 -m pytest -q                    # hooks, install script and dashboard server (tests/, dashboard/)
+python3 -m pytest -q                    # hooks, install and update scripts, dashboard server (tests/, dashboard/)
 claude plugin validate --strict .       # manifest check
 ```
 
