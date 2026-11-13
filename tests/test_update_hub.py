@@ -6,6 +6,7 @@ setup_hub.py 로 임시 폴더에 허브를 만든 뒤, 기준본과 허브 파�
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -175,6 +176,11 @@ def test_conflict_and_unknown_left_alone():
     assert tag_of(out, hub, 'CLAUDE.md') == 'keep' and tag_of(out, hub, 'supervisor.settings.json') == 'keep', out
     update(home, hub, '--accept', 'STATUS.md', ok=False)
 
+    old(hub, 'CLAUDE.md', without(t, DROP))  # replace 판정 파일을 --apply 없이 --accept 하면 틀 변경이 사라지니 멈춘다
+    before = snapshot(tmp)
+    update(home, hub, '--accept', 'CLAUDE.md', ok=False)
+    assert snapshot(tmp) == before
+
 
 # 4. 설정 JSON: 새 틀에서 생긴 최상위 키만 더하고, 사용자가 지운 키는 다시 넣지 않고, 깨진 JSON 을 쓰지 않는다
 def test_settings_json_adds_only_new_keys():
@@ -191,6 +197,31 @@ def test_settings_json_adds_only_new_keys():
     assert got['effortLevel'] == new['effortLevel'] and 'model' not in got, got
     assert got['permissions']['deny'] == ['Edit(~/projects/web/**)'], '중첩 값은 사용자 것 그대로'
     assert s['manual'] == [rel], '나머지 차이는 손으로 봄'
+
+
+# 4b. 기준본이 없는 설정 JSON(0.6.0 까지 만든 허브)은 키를 더하지 않고 바이트까지 그대로 둔다
+def test_settings_json_without_base_untouched():
+    tmp, home, hub = make_hub()
+    rel = '.claude/settings.json'
+    new = json.loads(text(os.path.join(REPO, 'examples', 'hub.settings.json')))
+    mine = json.dumps({k: v for k, v in new.items() if k != 'model'}, indent=4) + '\n'  # model 을 지우고 들여쓰기도 다름
+    old(hub, rel, None, mine)
+    out, s = update(home, hub, '--apply')
+    assert tag_of(out, hub, rel) == 'unknown', out
+    assert text(os.path.join(hub, '.claude', 'settings.json')) == mine, '지운 키를 다시 넣거나 다시 씀'
+    assert s['manual'] == [rel], s
+
+
+# 4c. 0.6.0 까지 만든 허브라도 새 틀과 같은 파일은 반영 때 기준본을 적는다
+def test_base_recorded_for_unchanged_files():
+    tmp, home, hub = make_hub()
+    shutil.rmtree(os.path.join(hub, '.lanekeeper'))
+    out, s = update(home, hub)
+    assert s['changed'] == 0 and s['manual'] == [] and s['base'] == 4, s
+    out, s = update(home, hub, '--apply')
+    assert s['backup'] is None and os.path.isfile(os.path.join(hub, '.lanekeeper', 'base', 'CLAUDE.md')), s
+    out, s = update(home, hub)
+    assert s['base'] == 0, s
 
 
 # 5. 백업에서 되돌리면 백업 폴더 밖의 허브가 반영 전과 바이트까지 같다(새로 만든 파일 지우기와 기준본 포함)

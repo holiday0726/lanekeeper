@@ -10,7 +10,7 @@
   keep      사용자가 고쳤고 틀은 그대로다. 손대지 않는다.
   replace   사용자가 고치지 않았고 틀이 바뀌었다. 새 틀로 바꾼다.
   merge     둘 다 바뀌었고 git merge-file 이 충돌 없이 합쳤다(md 만). 합친 결과를 쓴다.
-  addkeys   설정 JSON 에 새 틀에서 생긴 최상위 키가 없다. 그 키만 더하고 나머지 차이는 손으로 본다.
+  addkeys   설정 JSON 에 기준본 뒤 새 틀에서 생긴 최상위 키가 없다. 그 키만 더하고 나머지 차이는 손으로 본다.
   conflict  둘 다 바뀌었고 자동으로 못 합친다. 손대지 않고 틀이 바뀐 곳을 보여 준다.
   unknown   기준본이 없고(0.6.0 까지 만든 허브) 새 틀과 다르다. 손대지 않고 허브와 새 틀의 차이를 보여 준다.
 사용자 데이터(그 밖의 틀: STATUS.md, agents.json, decisions.json, dev-occupancy.json): 없을 때만 만든다.
@@ -20,7 +20,7 @@
 --apply    위 판정대로 쓴다. 쓰기 전에 <허브>/.lanekeeper/backup-<시각>/ 에 바뀔 파일과 손으로 볼 파일, 기준본을 백업한다.
 --accept   손으로 합쳤거나 그대로 두기로 한 파일의 기준본을 새 틀로 적는다. 다음부터 그 뒤에 바뀐 것만 보인다.
 --restore  백업 폴더대로 허브를 되돌린다(새로 만든 파일 지우기, 기준본 포함). 사용자 설정은 settings.json.bak-<시각> 으로 손으로 되돌린다.
-마지막 줄은 스킬이 읽는 JSON 이다: {"hub_dir", "version", "applied", "changed", "manual": [...], "backup"}
+마지막 줄은 스킬이 읽는 JSON 이다: {"hub_dir", "version", "applied", "changed", "base": 적을 기준본 수, "manual": [...], "backup"}
 """
 import argparse
 import difflib
@@ -93,8 +93,8 @@ def plan(rel, hub, base, new):
     shown = (hub, new, 'hub', 'new') if base is None else (base, new, 'old', 'new')
     if rel.endswith('.json'):
         cur, want, old = obj(hub), obj(new), obj(base)
-        add = [k for k in want or {} if cur is not None and k not in cur and k not in (old or {})]
-        if add:  # setup 의 사용자 설정 합치기와 같은 규칙. 사용자가 지운 키(기준본에 있던 키)는 다시 넣지 않는다
+        add = [k for k in want or {} if cur is not None and old is not None and k not in cur and k not in old]
+        if add:  # setup 의 사용자 설정 합치기와 같은 규칙. 기준본에 있던 키는 사용자가 지운 것이니 다시 넣지 않는다
             cur.update((k, want[k]) for k in add)
             return 'addkeys', json.dumps(cur, ensure_ascii=False, indent=2) + '\n', shown, ': ' + ', '.join(add)
         return manual, None, shown, ''
@@ -160,7 +160,7 @@ def main(argv=None):
         sys.exit('--accept 는 %s 중에서 고릅니다: %s' % (', '.join(sorted(MANAGED)), ', '.join(bad)))
 
     changed = merge_user_settings(config_dir(a.config_dir), dry=not a.apply)  # 설정이 깨져 있으면 허브를 건드리기 전에 멈춘다
-    todo, manual, bases = [], [], []
+    todo, manual, bases, lost = [], [], [], []
     for src, rel in sources():
         new = read(src)
         hub_text, base = read(at(hub, rel)), read(at(hub, BASE + '/' + rel))
@@ -170,11 +170,15 @@ def main(argv=None):
             show(rel, *shown)
         if text is not None:
             todo.append((rel, text, hub_text is None))
+            if rel in a.accept and tag not in MANUAL and not a.apply:
+                lost.append(rel)
         if tag in MANUAL and rel not in a.accept:
             manual.append(rel)
         elif rel in MANAGED and tag not in ('keep', 'data') and base != new:
             bases.append((rel, new))  # 기준본은 사용자가 새 틀까지 본 파일만 올린다
     changed += len(todo)
+    if lost:  # 기준본만 올리면 그 틀 변경이 다음부터 안 보인다
+        sys.exit('--accept 는 손으로 볼 파일(addkeys, conflict, unknown)에 씁니다. 이 파일은 --apply 로 반영합니다: ' + ', '.join(lost))
 
     bdir = None
     if a.apply and (todo or manual):
@@ -191,7 +195,8 @@ def main(argv=None):
     for rel in manual:
         say('manual', '%s: 손으로 합친 뒤(또는 그대로 두기로 하면) --accept %s' % (slash(at(hub, rel)), rel))
     print(json.dumps({'hub_dir': slash(hub), 'version': load(os.path.join(REPO, '.claude-plugin', 'plugin.json'))['version'],
-                      'applied': a.apply, 'changed': changed, 'manual': manual, 'backup': bdir and slash(bdir)}))
+                      'applied': a.apply, 'changed': changed, 'base': len(bases), 'manual': manual,
+                      'backup': bdir and slash(bdir)}))
 
 
 if __name__ == '__main__':

@@ -126,7 +126,7 @@ claude plugin update lanekeeper@lanekeeper
 - 사용자 설정(`~/.claude/settings.json`)과 플러그인 이름 아래 저장된 플러그인 설정값(`python`, `hub_dir` 등).
 - `~/.claude/plugins/data/lanekeeper-lanekeeper/` 의 대시보드 로그.
 
-받은 폴더로 설치했다면([손으로 설치하기](#손으로-설치하기)) 그 폴더에서 `git pull` 합니다.
+받은 폴더로 설치했다면([손으로 설치하기](#손으로-설치하기)) 그 폴더에서 `git pull` 한 뒤 위 두 명령을 돌립니다. `/lanekeeper:update` 는 `git pull` 할지 먼저 묻습니다.
 
 ## 옛 이름에서 옮기기
 
@@ -143,7 +143,7 @@ claude plugin install lanekeeper@lanekeeper
 claude plugin details lanekeeper@lanekeeper     # Skills (2), Hooks (2) 가 보이면 설치된 것
 ```
 
-플러그인은 그 폴더를 그대로 읽으니 옮기지 않습니다. 새 판은 그 폴더에서 `git pull` 한 뒤 `/reload-plugins` 를 입력합니다. 인터넷이 없는 PC 에는 `git bundle create ../lanekeeper.bundle HEAD main` 으로 만든 묶음을 옮겨 clone 합니다.
+마켓플레이스가 그 폴더를 가리키니 옮기지 않습니다. 플러그인은 설치할 때 `~/.claude/plugins/cache/` 로 복사한 사본으로 돌아가므로, 새 판은 그 폴더에서 `git pull` 한 뒤 [업데이트](#업데이트)의 두 명령이나 `/lanekeeper:update` 로 받습니다. 인터넷이 없는 PC 에는 `git bundle create ../lanekeeper.bundle HEAD main` 으로 만든 묶음을 옮겨 clone 합니다.
 
 ## Addy-skills (선택)
 

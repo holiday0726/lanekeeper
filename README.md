@@ -130,7 +130,7 @@ The two commands above and auto-update replace only the plugin's own copy under 
 - Your user settings (`~/.claude/settings.json`) and the plugin settings (`python`, `hub_dir` and the rest), which are stored under the plugin name.
 - The dashboard logs in `~/.claude/plugins/data/lanekeeper-lanekeeper/`.
 
-If you installed from a cloned folder ([Manual install](#manual-install)), run `git pull` in that folder instead.
+If you installed from a cloned folder ([Manual install](#manual-install)), run `git pull` in that folder and then the two commands above. `/lanekeeper:update` asks before it runs `git pull`.
 
 ## Moving from the old name
 
@@ -147,7 +147,7 @@ claude plugin install lanekeeper@lanekeeper
 claude plugin details lanekeeper@lanekeeper     # installed if it shows Skills (2), Hooks (2)
 ```
 
-The plugin reads that folder in place, so do not move it. To update, run `git pull` there and type `/reload-plugins`. For a PC without internet access, carry over `git bundle create ../lanekeeper.bundle HEAD main` and clone the bundle there.
+The marketplace points to that folder, so do not move it. The plugin runs from a copy made under `~/.claude/plugins/cache/` at install time, so to update, run `git pull` there and then the two commands in [Updating](#updating), or `/lanekeeper:update`. For a PC without internet access, carry over `git bundle create ../lanekeeper.bundle HEAD main` and clone the bundle there.
 
 ## Addy-skills (optional)
 

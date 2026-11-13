@@ -9,13 +9,14 @@ The skill itself comes with this version. The first time, run `claude plugin mar
 ### Added
 
 - `skills/update` and `scripts/update_hub.py <hub folder>`. The skill updates the plugin, shows the old and new version with the CHANGELOG in between, and previews what would change in the hub folder. Nothing is written until you say yes; then `--apply` backs up to `<hub folder>/.lanekeeper/backup-<time>/` first.
-- Rule documents (`CLAUDE.md`, `COORDINATION.md`) get a three way merge with `git merge-file`: your lines stay and only template changes go in. Settings JSON (`.claude/settings.json`, `supervisor.settings.json`) gets only new top level keys, and a key you deleted is not added back. Where both sides changed the same place, or for nested settings such as new permission lines, the file is left alone and shown for you to merge by hand. `--accept <file>` marks it as reviewed.
+- Rule documents (`CLAUDE.md`, `COORDINATION.md`) get a three way merge with `git merge-file`: your lines stay and only template changes go in. Settings JSON (`.claude/settings.json`, `supervisor.settings.json`) gets only top level keys that are new since the template copy, so a key you deleted is not added back. Without a template copy nothing is added. Where both sides changed the same place, or for nested settings such as new permission lines, the file is left alone and shown for you to merge by hand. `--accept <file>` marks it as reviewed.
 - `STATUS.md`, `agents.json`, `decisions.json` and `dev-occupancy.json` are your data. They are created when missing and otherwise never changed. A data JSON file that lacks a top level key of the new template gets a note (for example `lanes` in `agents.json` from 0.6.0).
 - User settings get the same "add missing keys only" merge as in `/lanekeeper:setup`.
 - `--restore <backup folder>` puts the hub folder back as it was before `--apply`, including hand merges done after it, files it created and the template copies.
 
 ### Changed
 
+- README "Manual install" and "Updating": a local marketplace also runs from a copy under `~/.claude/plugins/cache/`, so after `git pull` run the two update commands as well. Before, it said `git pull` and `/reload-plugins` were enough.
 - `/lanekeeper:setup` also keeps a copy of each file it copies in `<hub folder>/.lanekeeper/base/`. The update compares against these copies. A hub folder made with 0.6.0 or earlier has none, so its first update shows the full difference between your files and the new templates.
 
 ## 0.6.0

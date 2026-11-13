@@ -23,13 +23,19 @@ claude plugin configure lanekeeper@lanekeeper --json
 플러그인 이름이 `lanekeeper@lanekeeper` 가 아니면 이 항목의 `id` 를 아래 명령에 쓴다.
 설정값 `python` 을 아래 `<PY>` 로 쓰고, `hub_dir` 는 3단계의 기본값으로 둔다.
 `python` 이 비어 있으면 `/lanekeeper:setup` 을 먼저 부르라고 알리고 멈춘다.
+Windows 에서 `<PY>` 는 `python.exe` 절대 경로이니 `"<PY>"` 처럼 따옴표로 감싸고, PowerShell 에서는 앞에 `&` 를 붙인다(`& "<PY>" ...`).
 
 ## 2. 플러그인 새 판 받기
 
-`installPath` 가 `plugins/cache/` 아래가 아니면 받은 폴더를 로컬 마켓플레이스로 붙인 설치다(README "손으로 설치하기").
-그 폴더에서 `git pull --ff-only` 할지 사용자에게 묻고, 답한 때에만 돌린다.
+```
+claude plugin marketplace list --json
+```
 
-그 밖에는 아래 두 명령을 돌린다.
+`lanekeeper` 마켓플레이스의 `source` 가 `directory` 면 받은 폴더를 로컬 마켓플레이스로 붙인 설치다(README "손으로 설치하기").
+이때는 그 `path` 에서 `git pull --ff-only` 할지 사용자에게 먼저 묻고, 답한 때에만 돌린다.
+이 설치도 플러그인은 `plugins/cache/` 아래 사본으로 돌아가니, `git pull` 만으로는 바뀌지 않는다.
+
+이어서 아래 두 명령을 돌린다.
 플러그인 사본만 바꾸고 허브 폴더와 설정은 건드리지 않는다.
 
 ```
@@ -40,7 +46,8 @@ claude plugin update lanekeeper@lanekeeper
 `claude plugin list --json` 을 다시 돌려 새 `version` 과 `installPath` 를 읽는다.
 아래 `<ROOT>` 는 이 새 `installPath` 다.
 `${CLAUDE_PLUGIN_ROOT}` 는 이 세션이 처음 읽은 옛 판을 가리키니 쓰지 않는다.
-이 세션의 훅과 이 스킬 본문도 옛 판이고, 새 판은 6단계에서 다시 열 때 올라온다.
+새 판은 `plugins/cache/` 아래 새 판 번호 폴더에 생기고 옛 판 폴더도 남는다.
+이 세션의 훅과 이 스킬 본문은 옛 판 그대로이고, 새 판은 6단계에서 다시 열 때 올라온다.
 판이 같으면 이미 최신이라고 알리고, 허브가 그 판에 맞는지 보러 다음 단계로 간다.
 
 ## 3. 허브 폴더 정하기
@@ -64,7 +71,7 @@ claude plugin update lanekeeper@lanekeeper
 | `create` | 허브에 없는 틀 파일 | 새로 복사 |
 | `replace` | 사용자가 고치지 않았고 틀이 바뀌었다 | 새 틀로 바꿈 |
 | `merge` | 둘 다 바뀌었고 겹치지 않는다(`CLAUDE.md`, `COORDINATION.md`) | 사용자 줄을 두고 틀 변경만 넣음 |
-| `addkeys` | 설정 JSON 에 새 틀에서 생긴 최상위 키가 없다 | 그 키만 더함. 나머지는 손으로 |
+| `addkeys` | 설정 JSON 에 기준본 뒤 새 틀에서 생긴 최상위 키가 없다 | 그 키만 더함. 나머지는 손으로 |
 | `conflict` | 둘 다 같은 곳을 바꿨다 | 손대지 않음. 손으로 |
 | `unknown` | 0.6.0 까지 만든 허브라 기준본이 없고 새 틀과 다르다 | 손대지 않음. 손으로 |
 | `data` | 현황판, 명단, 결정, dev 점유 같은 사용자 데이터 | 손대지 않음 |
@@ -73,7 +80,8 @@ claude plugin update lanekeeper@lanekeeper
 `data` 줄에 `새 틀에 있는 키가 없음` 이 붙으면 그 키를 손으로 더할지 사용자에게 알린다(예: 0.6.0 의 `agents.json` `lanes`).
 `<ROOT>/CHANGELOG.md` 에서 1단계 판보다 새 절을 요약해 함께 보여 준다.
 판이 같았으면 맨 위 절만 보여 준다.
-마지막 줄 JSON 의 `changed` 가 0 이고 `manual` 이 비어 있으면 허브가 이미 새 판에 맞으니 6단계로 간다.
+마지막 줄 JSON 의 `changed` 와 `base` 가 0 이고 `manual` 이 비어 있으면 허브가 이미 새 판에 맞으니 6단계로 간다.
+`changed` 와 `manual` 은 비었는데 `base` 만 있으면 바뀔 파일은 없고 기준본만 처음 적는 것이다. 그렇게 알리고 5단계로 간다.
 
 ## 5. 확인 뒤 반영
 
@@ -105,6 +113,7 @@ claude plugin update lanekeeper@lanekeeper
 ```
 
 파일 이름은 `manual` 에 나온 그대로 쓴다(예: `CLAUDE.md`, `.claude/settings.json`).
+`--apply` 없이 `replace`, `merge`, `create` 판정인 파일을 주면 그 틀 변경이 다음부터 안 보이게 되므로 스크립트가 멈춘다.
 `--accept` 하지 않은 파일은 다음 미리 보기에 다시 나온다.
 
 ## 6. 되돌리는 법과 마지막 안내
