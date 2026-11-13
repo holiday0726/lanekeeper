@@ -842,15 +842,17 @@ def refresh_launches(since):
 def link_parents(rows, found):
     """Give each row started by `claude --bg` its parent: a['parent'] is the sessionId of the listed session that started
     it, or of the nearest listed one above it when that one is closed. a['launcher'] names the direct starter and
-    a['launcherGone'] says it is not listed. Starters are matched by sessionId only, never by name; the closed ones above
-    are followed by the job id their sessionId starts with. A loop is cut, so parents always form a tree."""
+    a['launcherGone'] says it is closed and was itself started with `claude --bg` (a supervisor, say); a closed starter
+    with no such record was opened by a person, like an earlier hub session, and is not worth a note. Starters are
+    matched by sessionId only, never by name; the closed ones above are followed by the job id their sessionId starts
+    with. A loop is cut, so parents always form a tree."""
     by_sid = {a['sessionId']: a for a in rows if a.get('sessionId') and a.get('engine') != 'codex'}
     for a in by_sid.values():
         if a.get('id') not in found:
             continue
         sid, name = found[a['id']]
         a['launcher'] = (by_sid[sid].get('name') if sid in by_sid else name) or sid[:8]
-        a['launcherGone'] = sid not in by_sid
+        a['launcherGone'] = sid not in by_sid and sid[:8] in found
         seen = {a['id']}
         while sid not in by_sid and sid[:8] in found and sid[:8] not in seen:   # closed: go up to whoever started it
             seen.add(sid[:8])

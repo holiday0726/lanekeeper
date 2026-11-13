@@ -412,6 +412,7 @@ def test_parents():
     tr('dead0001-0000', 'gone-supervisor', bash(T + 40, 'b7', 'claude --bg --name orphan', bg('ffff0001', 'orphan')))
     tr('c0de0001-0000', 'p', bash(T + 50, 'b8', 'claude --bg --name q', bg('c0de0002', 'q')))
     tr('c0de0002-0000', 'q', bash(T + 51, 'b9', 'claude --resume x --bg --name p', 'stopped c0de0001\nnote: started a copy as c0de0001'))
+    tr('0d0b0001-0000', 'hub', bash(T - 3600, 'b11', 'claude --bg --name early', bg('ea001001', 'early')))   # an earlier hub session
     tr('oldsid', 'old', bash(T - 90 * 86400, 'b10', 'claude --bg --name w9', bg('9999aaaa', 'w9')), age=90 * 86400)   # outside the window
     found = server.launches(NOW * 1000 - 86400000, root=mp)
     assert found['aaaa0001'] == ('hubsid', 'hub') and found['dead0001'] == ('hubsid', 'hub') and 'cccc0004' not in found
@@ -420,7 +421,7 @@ def test_parents():
 
     row = lambda name, job: dict(name=name, id=job, sessionId=(job + '-0000') if job else name + 'sid')
     rows = [row('hub', None), row('task-a-supervisor', 'aaaa0001'), row('w1', 'bbbb0001'), row('w2', 'bbbb0002'),
-            row('w1-sub', 'eeee0001'), row('orphan', 'ffff0001'), row('alone', '12345678'), row('p', 'c0de0001'), row('q', 'c0de0002'),
+            row('w1-sub', 'eeee0001'), row('orphan', 'ffff0001'), row('alone', '12345678'), row('early', 'ea001001'), row('p', 'c0de0001'), row('q', 'c0de0002'),
             dict(name='codex x', id='bbbb0001', sessionId='codexsid', engine='codex')]
     rows[0]['sessionId'] = 'hubsid'
     by = {a['name']: a for a in server.link_parents(rows, found)}
@@ -430,6 +431,8 @@ def test_parents():
     # the one that started it is closed: up past it to the hub, and its name is kept for the card
     assert by['orphan']['parent'] == 'hubsid' and by['orphan']['launcher'] == 'gone-supervisor' and by['orphan']['launcherGone'] is True
     assert 'parent' not in by['alone'] and 'launcher' not in by['alone'] and 'parent' not in by['hub']   # no record: under the hub as before
+    # started by an earlier hub session that a person opened: under the hub, and no closed-starter note
+    assert 'parent' not in by['early'] and by['early']['launcher'] == 'hub' and by['early']['launcherGone'] is False
     assert ('parent' in by['p']) != ('parent' in by['q']), '순환은 한쪽을 끊는다'
     assert 'parent' not in by['codex x']
     shutil.rmtree(mp)
