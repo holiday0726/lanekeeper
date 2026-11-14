@@ -13,8 +13,10 @@
   addkeys   설정 JSON 에 기준본 뒤 새 틀에서 생긴 최상위 키가 없다. 그 키만 더하고 나머지 차이는 손으로 본다.
   conflict  둘 다 바뀌었고 자동으로 못 합친다. 손대지 않고 틀이 바뀐 곳을 보여 준다.
   unknown   기준본이 없고(0.6.0 까지 만든 허브) 새 틀과 다르다. 손대지 않고 허브와 새 틀의 차이를 보여 준다.
-사용자 데이터(그 밖의 틀: STATUS.md, agents.json, decisions.json, dev-occupancy.json): 없을 때만 만든다.
+사용자 데이터(그 밖의 틀: STATUS.md, agents.json, decisions.json, dev-occupancy.json, lanes.json): 없을 때만 만든다.
   data      손대지 않는다. JSON 이면 새 틀에 있고 허브에 없는 최상위 키를 note 로 알린다.
+  migrate   lanes.json 이 없고 agents.json 에 "lanes"(0.7 까지의 자리)가 있다. 그 값으로 lanes.json 을 만든다. agents.json 은 그대로.
+  skip      lanes.json 이 없는데 agents.json 이 깨졌다. 틀이 실제 레인을 가리지 않게 만들지 않는다.
 사용자 설정(<설정 폴더>/settings.json): setup_hub.py 의 merge_user_settings 로 없는 키만 더한다.
 
 --apply    위 판정대로 쓴다. 쓰기 전에 <허브>/.lanekeeper/backup-<시각>/ 에 바뀔 파일과 손으로 볼 파일, 기준본을 백업한다.
@@ -33,7 +35,8 @@ import tempfile
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from setup_hub import BASE, REPO, at, config_dir, load, merge_user_settings, native, put, say, slash, sources  # noqa: E402
+from setup_hub import (BASE, LANES, REPO, at, config_dir, lanes_seed, load, merge_user_settings, native, put,  # noqa: E402
+                       say, slash, sources)
 
 MANAGED = {'CLAUDE.md', 'COORDINATION.md', '.claude/settings.json', 'supervisor.settings.json'}
 STATE = '.lanekeeper'
@@ -165,6 +168,14 @@ def main(argv=None):
         new = read(src)
         hub_text, base = read(at(hub, rel)), read(at(hub, BASE + '/' + rel))
         tag, text, shown, extra = plan(rel, hub_text, base, new)
+        if rel == LANES and tag == 'create':   # 0.7 까지의 허브: agents.json 의 lanes 를 옮긴다
+            text, why = lanes_seed(hub, src)
+            if text is None:
+                tag, extra = 'skip', ': ' + why
+            elif why:
+                tag, extra = 'migrate', ': agents.json 의 lanes 를 옮김. 이제 lanes.json 만 읽으니 agents.json 의 lanes 는 지워도 된다'
+        elif rel == 'agents.json' and 'lanes' in (obj(hub_text) or {}) and os.path.exists(at(hub, LANES)):
+            extra += ': lanes 키는 lanes.json 이 있어 읽지 않음. 지워도 된다'
         say(tag, slash(at(hub, rel)) + extra)
         if shown and not a.apply:
             show(rel, *shown)

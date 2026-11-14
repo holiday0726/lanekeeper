@@ -18,8 +18,22 @@ import urllib.error
 import urllib.request
 
 from hubpath import inside, native, norm
+from lane_guard import read_lanes
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def lanes_note(hub):
+    """레인 정의가 깨졌거나, 옛 자리(agents.json)에 있거나, 없으면 허브에게 붙일 말. 문제가 없으면 ''."""
+    lanes, where, why = read_lanes(hub)
+    if lanes is None:
+        return ', 다만 레인 정의 %s 를 읽지 못해(%s) 쓰기 보호 훅이 허브 폴더 밖 쓰기를 모두 막고 있음. 고치면 풀림' % (where, why)
+    if where.endswith('lanes.json'):
+        return ''
+    if lanes:
+        return (', 다만 레인을 agents.json 의 lanes 에서 읽는 중. /lanekeeper:update 로 lanes.json 으로 옮기면 명부가 깨져도 '
+                '레인 보호가 남음')
+    return ', 다만 lanes.json 이 없어 쓰기 보호 훅은 허브 폴더만 지킴(/lanekeeper:update 가 틀을 만듦)'
 
 
 def opt(key, default=''):
@@ -113,6 +127,7 @@ def main():
         msg += ', 처음 열 때는 %s/?token=%s' % (url, token)
     if opt('orca', 'true').lower() in ('true', '1', 'yes', 'on'):
         msg += orca_tab(url + ('/?token=' + token if token else ''), port)
+    msg += lanes_note(hub)
     msg += '. 다른 PC 에서 볼 때는 README 의 "다른 PC 에서 보기"'
     print(json.dumps({'systemMessage': msg}, ensure_ascii=False))
     return 0

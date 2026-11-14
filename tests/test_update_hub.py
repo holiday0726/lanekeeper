@@ -139,7 +139,7 @@ def test_apply_updates_templates_and_keeps_user_data():
     assert text(settings) == mine_settings
     for n in DATA:
         assert open(os.path.join(hub, n), 'rb').read() == data[n], n + ' 사용자 데이터가 바뀜'
-    assert '새 틀에 있는 키가 없음 lanes' in out, 'agents.json 에 lanes 가 없다고 알림'
+    assert tag_of(out, hub, 'lanes.json') == 'data' and '새 틀에 있는 키가 없음 lanes' not in out, out
     for n in ('CLAUDE.md', 'COORDINATION.md'):
         assert text(os.path.join(hub, '.lanekeeper', 'base', n)) == template(n), n + ' 기준본을 새 틀로'
     assert s['applied'] and s['changed'] == 2 and s['manual'] == [] and s['backup'], s
@@ -245,6 +245,43 @@ def test_backup_and_restore():
     run(home, UPDATE, hub, '--restore', s['backup'])
     assert hub_files() == before, '되돌린 뒤 다름'
     assert os.path.isdir(s['backup']), '백업은 남김'
+
+
+# 5b. 0.7 까지의 허브(lanes.json 없음): agents.json 의 lanes 를 lanes.json 으로 옮긴다. 미리 보기는 쓰지 않는다
+def test_lanes_migrate():
+    tmp, home, hub = make_hub()
+    os.remove(os.path.join(hub, 'lanes.json'))
+    lanes = {'WEB': ['~/projects/web']}
+    roster = {'resident': {'hub': {'lane': 'HUB', 'cwd': hub}}, 'task': {'task-x': {'task': 'T-1'}}, 'lanes': lanes}
+    write(os.path.join(hub, 'agents.json'), json.dumps(roster))
+    before = snapshot(tmp)
+    out, s = update(home, hub)
+    assert tag_of(out, hub, 'lanes.json') == 'migrate' and snapshot(tmp) == before, out
+    out, s = update(home, hub, '--apply')
+    assert load(os.path.join(hub, 'lanes.json'))['lanes'] == lanes, out
+    assert load(os.path.join(hub, 'agents.json')) == roster, 'agents.json 은 그대로'
+    assert s['changed'] == 1, s
+    out, s = update(home, hub, '--apply')
+    assert tag_of(out, hub, 'lanes.json') == 'data' and s['changed'] == 0, out
+    run(home, UPDATE, hub, '--restore', backups_dir(hub))   # 첫 반영의 백업
+    assert not os.path.exists(os.path.join(hub, 'lanes.json')), '되돌리면 옮겨 만든 lanes.json 도 지운다'
+
+
+# 5c. nipa 허브 모양(lanes 없음)은 틀 lanes.json 을 만들고, 깨진 agents.json 이면 lanes.json 을 만들지 않는다
+def test_lanes_without_or_broken_agents():
+    tmp, home, hub = make_hub()
+    os.remove(os.path.join(hub, 'lanes.json'))
+    write(os.path.join(hub, 'agents.json'), json.dumps({'resident': {'hub': {'lane': 'hub'}}, 'task': {'task-a': {}}}))
+    out, s = update(home, hub, '--apply')
+    assert tag_of(out, hub, 'lanes.json') == 'create' and text(os.path.join(hub, 'lanes.json')) == template('lanes.json')
+    os.remove(os.path.join(hub, 'lanes.json'))
+    write(os.path.join(hub, 'agents.json'), '{"resident": ')
+    out, s = update(home, hub, '--apply')
+    assert tag_of(out, hub, 'lanes.json') == 'skip' and not os.path.exists(os.path.join(hub, 'lanes.json')), out
+
+
+def backups_dir(hub):
+    return os.path.join(hub, '.lanekeeper', backups(hub)[-1])
 
 
 # 6. 허브가 아닌 폴더에서는 아무것도 쓰지 않고 멈춘다

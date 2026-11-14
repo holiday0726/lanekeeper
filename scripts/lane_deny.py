@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """레인 정의로 허브 세션의 permissions.deny 줄을 만든다: python3 scripts/lane_deny.py <허브 폴더>
 
-<허브 폴더>/agents.json 의 "lanes" 경로마다 "Edit(<경로>/**)" 를 찍는다. 파일은 고치지 않는다.
+<허브 폴더>/lanes.json(없으면 agents.json)의 "lanes" 경로마다 "Edit(<경로>/**)" 를 찍는다. 파일은 고치지 않는다.
 출력을 허브 폴더 .claude/settings.json 의 permissions.deny 에 붙여 넣는다.
 권한 규칙에서 / 로 시작하는 경로는 설정 파일 기준이라, 절대 경로는 //경로 로, Windows 드라이브는 //c/Users/... 꼴로 쓴다.
 """
@@ -12,7 +12,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'hooks'))
 from hubpath import native  # noqa: E402
-from lane_guard import read_roster  # noqa: E402
+from lane_guard import read_lanes  # noqa: E402
 
 
 def rule(path, hub):
@@ -32,7 +32,9 @@ def rule(path, hub):
 
 
 def rules(hub):
-    lanes = read_roster(hub).get('lanes')
+    lanes, where, why = read_lanes(hub)
+    if lanes is None:
+        sys.exit('레인 정의를 읽지 못했습니다(%s): %s' % (why, where))
     out = []
     for paths in lanes.values() if isinstance(lanes, dict) else ():
         for p in [paths] if isinstance(paths, str) else paths if isinstance(paths, list) else []:
@@ -47,7 +49,7 @@ def main(argv):
     sys.stdout.reconfigure(encoding='utf-8')
     out = rules(argv[0])
     if not out:
-        sys.exit('agents.json 의 "lanes" 가 비어 있습니다: ' + os.path.join(native(argv[0]), 'agents.json'))
+        sys.exit('레인 정의의 "lanes" 가 비어 있습니다: ' + (read_lanes(argv[0])[1] or os.path.join(native(argv[0]), 'lanes.json')))
     print(json.dumps(out, ensure_ascii=False, indent=2))
 
 

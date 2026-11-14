@@ -19,6 +19,21 @@ import urllib.request
 
 REPO = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 HOOK = os.path.join(REPO, 'hooks', 'open_dashboard.py')
+sys.path.insert(0, os.path.join(REPO, 'hooks'))
+from open_dashboard import lanes_note  # noqa: E402
+
+
+# 허브 세션이 열릴 때 레인 정의가 없거나, 옛 자리(agents.json)에 있거나, 깨졌으면 알린다
+def test_lanes_note(tmp_path):
+    hub = tmp_path
+    (hub / 'agents.json').write_text('{"resident": {}}', encoding='utf-8')
+    assert 'lanes.json 이 없어' in lanes_note(str(hub)), 'nipa 모양: 막지는 않고 허브 폴더만 지킨다고 알린다'
+    (hub / 'agents.json').write_text('{"lanes": {"WEB": ["~/w"]}}', encoding='utf-8')
+    assert 'agents.json' in lanes_note(str(hub)) and '/lanekeeper:update' in lanes_note(str(hub))
+    (hub / 'lanes.json').write_text('{"lanes": {}}', encoding='utf-8')
+    assert lanes_note(str(hub)) == ''
+    (hub / 'lanes.json').write_text('{"lanes": ', encoding='utf-8')
+    assert '모두 막' in lanes_note(str(hub)) and 'lanes.json' in lanes_note(str(hub))
 
 def test_open_dashboard():
     tmp = tempfile.mkdtemp()

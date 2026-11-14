@@ -4,6 +4,7 @@
 /lanekeeper:setup 스킬이 부른다. 다시 돌려도 결과가 같다.
 1. 허브 폴더를 만들고 templates/hub/* 와 설정 예시 둘을 복사한다. 있는 파일은 덮지 않는다.
    복사한 파일은 <허브>/.lanekeeper/base/ 에도 남긴다. update_hub.py 가 다음 판과 비교할 기준본이다.
+   lanes.json 이 없고 agents.json 에 "lanes"(0.7 까지의 자리)가 있으면 그 값을 옮겨 만든다. agents.json 이 깨졌으면 만들지 않는다.
 2. 사용자 설정(<설정 폴더>/settings.json)에 examples/user.settings.json 의 키 중 없는 것만 더한다. 쓰기 전에 백업한다.
 3. agents.json 의 resident.hub.cwd 가 비어 있으면 허브 폴더 경로를 넣는다.
 설정 폴더는 --config-dir, CLAUDE_CONFIG_DIR, ~/.claude 순으로 정한다.
@@ -62,16 +63,55 @@ def put(src, dst):
     shutil.copyfile(src, dst)
 
 
+LANES = 'lanes.json'
+
+
+def lanes_seed(hub, src):
+    """새로 만들 lanes.json 의 (글, 판정). agents.json 의 "lanes"(0.7 까지의 자리)가 있으면 그 값을 옮긴다('migrated').
+
+    없으면 틀 그대로(''). agents.json 을 읽지 못하면 (None, 이유): 틀의 자리표시가 깨진 명부 속 실제 레인 대신 읽히면
+    레인 보호가 조용히 꺼지므로 만들지 않는다.
+    """
+    with open(src, encoding='utf-8') as f:
+        tpl = f.read()
+    path = os.path.join(hub, 'agents.json')
+    if not os.path.exists(path):
+        return tpl, ''
+    try:
+        d = load(path)
+    except (OSError, ValueError) as e:
+        return None, 'agents.json 을 읽지 못해 만들지 않음(%s). agents.json 을 고친 뒤 다시 돌린다' % str(e)[:120]
+    if not isinstance(d, dict):
+        return None, 'agents.json 이 JSON 객체가 아니라 만들지 않음. agents.json 을 고친 뒤 다시 돌린다'
+    if 'lanes' not in d:
+        return tpl, ''
+    new = json.loads(tpl)
+    new['lanes'] = d['lanes']
+    return json.dumps(new, ensure_ascii=False, indent=2) + '\n', 'migrated'
+
+
 def copy_files(hub):
     changed = 0
-    for src, rel in sources():
+    for src, rel in sources():   # agents.json 이 lanes.json 보다 먼저 온다
         dst = at(hub, rel)
         if os.path.exists(dst):
             say('exists', slash(dst))
             continue
-        put(src, dst)
+        tag, note = 'created', ''
+        if rel == LANES:
+            text, why = lanes_seed(hub, src)
+            if text is None:
+                say('skipped', '%s: %s' % (slash(dst), why))
+                continue
+            if why:
+                tag, note = why, ': agents.json 의 lanes 를 옮김. 이제 lanes.json 만 읽으니 agents.json 의 lanes 는 지워도 된다'
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            with open(dst, 'w', encoding='utf-8', newline='\n') as f:
+                f.write(text)
+        else:
+            put(src, dst)
         put(src, at(hub, BASE + '/' + rel))
-        say('created', slash(dst))
+        say(tag, slash(dst) + note)
         changed += 1
     return changed
 
@@ -112,8 +152,12 @@ def merge_user_settings(config_dir, dry=False):
 
 def fill_roster(hub):
     path = os.path.join(hub, 'agents.json')
-    data = load(path)
-    entry = data.setdefault('resident', {}).setdefault('hub', {'lane': 'HUB'})
+    try:
+        data = load(path)
+        entry = data.setdefault('resident', {}).setdefault('hub', {'lane': 'HUB'})
+    except (ValueError, AttributeError):
+        say('skipped', '%s: JSON 객체로 읽지 못해 resident.hub.cwd 를 채우지 않음' % slash(path))
+        return 0
     if entry.get('cwd'):
         say('kept', '%s: resident.hub.cwd = %s' % (slash(path), entry['cwd']))
         return 0

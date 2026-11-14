@@ -1,15 +1,9 @@
 {
-  "_note": "허브가 관리한다. 대시보드가 읽어 상시(resident)와 일회성(task) 세션을 나눈다. 키는 세션 이름이다. lane 이 HUB 인 세션이 대시보드 흐름 그래프 가운데에 온다. 세션을 열고 닫을 때 같이 고친다. lanes 는 레인마다 소유 경로 목록이다. lanekeeper 훅이 읽어 다른 레인 경로 쓰기를 막는다. COORDINATION.md 2절 표와 같게 둔다.",
+  "_note": "허브가 관리한다. 상주 세션(resident)만 적는다. 키는 세션 이름이다. lane 이 HUB 인 세션이 대시보드 흐름 그래프 가운데에 온다. 일회성 세션은 적지 않는다: lk spawn 이 이름을 task-T<YYYYMMDD>-<NN>-<주제> 로 강제하고, 대시보드가 claude agents --json 과 그 이름에서 일회성 여부와 T 번호를, cwd 와 lanes.json 에서 레인을 읽는다. 레인별 소유 경로는 lanes.json 에 둔다.",
   "resident": {
     "hub": {
       "lane": "HUB",
       "cwd": ""
     }
-  },
-  "task": {},
-  "lanes": {
-    "<레인>": [
-      "<저장소 또는 폴더의 절대 경로>"
-    ]
   }
 }
