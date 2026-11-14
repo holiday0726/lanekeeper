@@ -17,6 +17,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 from datetime import datetime
@@ -27,6 +28,9 @@ from urllib.parse import parse_qs, urlparse
 HOST, PORT = '127.0.0.1', int(os.environ.get('PORT', 4990))
 TOKEN = os.environ.get('LANEKEEPER_TOKEN', '')   # optional; empty means no token check
 ROOT = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(ROOT, '..', 'hooks'))   # the lane rules the write guard uses
+from hubpath import inside, norm, task_name  # noqa: E402
+from lane_guard import HUB as HUB_LANE, lane_roots, owner, read_lanes  # noqa: E402
 
 
 def plugin_version():
@@ -42,7 +46,7 @@ VERSION = plugin_version()
 PROJECTS = os.path.expanduser('~/.claude/projects')
 JOBS = os.path.expanduser('~/.claude/jobs')
 HUB = os.path.abspath(os.path.expanduser(os.environ.get('HUB_DIR') or '.'))   # hub folder; the four files below are read only
-ROSTER = os.path.join(HUB, 'agents.json')   # hub's roster
+ROSTER = os.path.join(HUB, 'agents.json')   # hub's residents (and task entries written up to 0.7)
 DECISIONS = os.path.join(HUB, 'decisions.json')   # hub's decision list
 STATUS_MD = os.path.join(HUB, 'STATUS.md')   # hub's status board
 DEV = os.path.join(HUB, 'dev-occupancy.json')   # hub's list of who holds the dev stack
@@ -135,7 +139,31 @@ def roster(path=ROSTER):
     return out
 
 
-SECTIONS = ('busy', 'wait', 'done')    # 진행 중, 입력 대기, 종료 (top to bottom)
+def classify(a, ro, roots, hub=HUB):
+    """{group, lane, task} of one listed session. group: a resident in agents.json, else task for a task- name (or a
+    task entry written up to 0.7), else other. task: the T number in a task-T<YYYYMMDD>-<NN>-<topic> name, else the
+    entry's. lane: HUB inside the hub folder, else the entry's, else the lanes.json lane its cwd is under."""
+    name, cwd = a.get('name') or '', a.get('cwd') or ''
+    r = ro.get(name) or {}
+    group = 'resident' if r.get('group') == 'resident' else 'task' if name.startswith('task-') or r else 'other'
+    here = norm(cwd) if cwd else ''
+    lane = HUB_LANE if here and inside(here, norm(hub)) else r.get('lane') or (here and owner(here, roots)) or ''
+    return {'group': group, 'lane': lane, 'task': (task_name(name) or {}).get('task') or r.get('task', '')}
+
+
+def names_of(rows, path=ROSTER, hub=HUB):
+    """name -> {group, lane, task} for every named Claude session in rows, plus agents.json entries not listed.
+    Sessions are not registered anywhere: lk spawn names them, so the live list and the name are the task roster."""
+    ro = roster(path)
+    roots = lane_roots(hub, read_lanes(hub)[0])   # unreadable lanes.json: only the hub folder has a lane
+    out = {n: {k: v[k] for k in ('group', 'lane', 'task')} for n, v in ro.items()}
+    for a in rows:
+        if a.get('name') and a.get('engine') != 'codex':
+            out[a['name']] = classify(a, ro, roots, hub)
+    return out
+
+
+SECTIONS =('busy', 'wait', 'done')    # 진행 중, 입력 대기, 종료 (top to bottom)
 KIND_ORDER = {'task': 0, 'resident': 1, 'other': 2}
 
 
@@ -413,9 +441,9 @@ def agents():
         out = subprocess.run([CLAUDE, 'agents', '--json', '--all'],
                              capture_output=True, encoding='utf-8', errors='replace', timeout=15).stdout
         rows = json.loads(out or '[]')
-        names = roster()
+        ro, roots = roster(), lane_roots(HUB, read_lanes(HUB)[0])
         for a in rows:
-            a.update(names.get(a.get('name'), {'group': 'other'}))
+            a.update(classify(a, ro, roots))
             p = transcript_path(a.get('sessionId', ''), a.get('cwd'))
             a['hasTranscript'] = bool(p)
             a['subagents'] = subagents_of(a.get('sessionId'))
@@ -459,9 +487,12 @@ def merge_decisions(items, rows, names):
         r = names.get(name)
         if r:
             return r
-        # residents are always in the roster and task sessions leave it when closed,
+        # residents are always in agents.json and task sessions are only in the live list,
         # so a source that is neither listed nor running is taken as a closed one-off session
-        return {'group': 'other'} if name in live else {'group': 'task', 'closed': True}
+        if name in live:
+            return {'group': 'other'}
+        t = (task_name(name) or {}).get('task')
+        return dict({'group': 'task', 'closed': True}, **({'task': t} if t else {}))
 
     def lst(v):
         return [str(x) for x in v] if isinstance(v, list) else [str(v)] if v else []
@@ -709,8 +740,10 @@ def ms_or_none(ts):
 
 # lines worth parsing: usage, SendMessage calls, their results and peer receipts (msg_id), the session name,
 # Bash calls that start a background session and their output
-SCAN_KEYS = (b'"usage"', b'"SendMessage"', b'msg_id', b'cross-session-message', b'"agent-name"', b'--bg', b'backgrounded', b'attach ', b'copy as ')
-BG_CMD = re.compile(r'\bclaude\s(?:[^\n;&|]*\s)?--bg\b')   # a Bash command that runs `claude --bg`
+SCAN_KEYS = (b'"usage"', b'"SendMessage"', b'msg_id', b'cross-session-message', b'"agent-name"', b'--bg', b'lk spawn',
+             b'backgrounded', b'attach ', b'copy as ')
+# a Bash command that runs `claude --bg`, or `lk spawn` that runs it and passes its output through
+BG_CMD = re.compile(r'\bclaude\s(?:[^\n;&|]*\s)?--bg\b|\blk\s+spawn\b')
 # the new job id in its output: `backgrounded · <id> · <name>`, the `claude attach <id>` hint (often all that is kept
 # by `| grep attach`), or `started a copy as <id>` when an existing session with other flags was copied
 BG_OUT = re.compile(r'(?:^backgrounded\W+|\battach\s+|\bcopy as\s+)([0-9a-f]{8})\b', re.M)
@@ -971,7 +1004,7 @@ def messages(hours=24, now=None, root=PROJECTS, rows=(), names=None):
     """
     now = time.time() if now is None else now
     since = int((now - hours * 3600) * 1000) if hours > 0 else 0
-    names = roster() if names is None else names
+    names = names_of(rows) if names is None else names
     by_sid = {a.get('sessionId'): a for a in rows}
     sends, recvs = [], []
     for p in glob.glob(os.path.join(root, '*', '*.jsonl')):
@@ -1003,7 +1036,8 @@ def messages(hours=24, now=None, root=PROJECTS, rows=(), names=None):
         a, r = first.get(n), names.get(n) or {}
         # as in merge_decisions(): neither in agents.json nor listed is taken as a closed one-off session
         group = 'codex' if a and a.get('engine') == 'codex' else r.get('group') or ('other' if a else 'task')
-        nodes.append(dict(c, name=n, group=group, lane=r.get('lane', ''), task=r.get('task', ''), listed=bool(a),
+        nodes.append(dict(c, name=n, group=group, lane=r.get('lane', ''), listed=bool(a),
+                          task=r.get('task') or (task_name(n) or {}).get('task', ''),
                           **{k: a.get(k) for k in ('state', 'status', 'kind', 'engine', 'sessionId')} if a else {}))
     hub = next((n for n, r in names.items() if r.get('lane') == 'HUB'), None)
     return {'hours': hours, 'hub': hub, 'nodes': nodes,   # nothing time-varying, so an unchanged answer is byte-identical
@@ -1057,7 +1091,7 @@ class Handler(BaseHTTPRequestHandler):
                     rows = agents()
                 except (subprocess.SubprocessError, OSError, ValueError):
                     rows = []
-                return self.send(200, dict(merge_decisions(items, rows, roster()), error=err))
+                return self.send(200, dict(merge_decisions(items, rows, names_of(rows)), error=err))
             if url.path == '/api/todos':
                 try:
                     rows = agents()

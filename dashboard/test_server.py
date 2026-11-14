@@ -91,6 +91,41 @@ def test_roster():
     assert server.roster(f.name) == {}
 
 
+# task roster from the live list and names: task- prefix makes a task, the T number comes from the name, the lane from
+# the hub folder, an agents.json entry, or the cwd under lanes.json. nipa's agents.json (no lanes, lowercase hub lane,
+# task names without T) must still sort
+def test_names_from_rows(tmp_path):
+    hub, web = tmp_path / 'hub', tmp_path / 'web'
+    hub.mkdir()
+    (hub / 'agents.json').write_text(json.dumps({
+        'resident': {'hub': {'lane': 'hub', 'cwd': str(hub)}, 'WF1': {'lane': 'WF1', 'cwd': '/w', 'note': 'x'}},
+        'task': {'task-lanekeeper-update': {'lane': 'lanekeeper', 'task': 'T-20261113-04'}}}), encoding='utf-8')
+    rows = [dict(name='hub', cwd=str(hub / 'reports')), dict(name='WF1', cwd=str(tmp_path / 'wf1')),
+            dict(name='task-T20261114-09-a', cwd=str(web / '.claude' / 'worktrees' / 'x')),
+            dict(name='task-lanekeeper-update', cwd=str(web)), dict(name='task-x', cwd='/elsewhere'),
+            dict(name='stranger', cwd=str(web)), dict(name=None, cwd=str(web)),
+            dict(name='codex a', cwd=str(web), engine='codex')]
+    n = server.names_of(rows, str(hub / 'agents.json'), str(hub))
+    assert n['hub'] == {'group': 'resident', 'lane': 'HUB', 'task': ''}, '허브 폴더 세션은 HUB'
+    assert n['WF1'] == {'group': 'resident', 'lane': 'WF1', 'task': ''}
+    assert n['task-T20261114-09-a'] == {'group': 'task', 'lane': '', 'task': 'T-20261114-09'}, 'lanes.json 이 없으면 lane 없음'
+    assert n['task-lanekeeper-update'] == {'group': 'task', 'lane': 'lanekeeper', 'task': 'T-20261113-04'}, '0.7 까지의 등록'
+    assert n['task-x'] == {'group': 'task', 'lane': '', 'task': ''} and n['stranger']['group'] == 'other'
+    assert 'codex a' not in n and None not in n
+    (hub / 'lanes.json').write_text(json.dumps({'lanes': {'WEB': [str(web)]}}), encoding='utf-8')
+    n = server.names_of(rows, str(hub / 'agents.json'), str(hub))
+    assert n['task-T20261114-09-a']['lane'] == 'WEB' and n['stranger']['lane'] == 'WEB', 'worktree 는 저장소 레인'
+    assert n['task-lanekeeper-update']['lane'] == 'lanekeeper', 'agents.json 에 적은 lane 이 앞선다'
+    (hub / 'lanes.json').write_text('{broken', encoding='utf-8')
+    (hub / 'agents.json').write_text('{broken', encoding='utf-8')
+    n = server.names_of(rows, str(hub / 'agents.json'), str(hub))
+    assert n['task-T20261114-09-a'] == {'group': 'task', 'lane': '', 'task': 'T-20261114-09'}, '파일이 깨져도 이름으로 나눈다'
+    assert n['hub']['lane'] == 'HUB' and n['WF1']['group'] == 'other'
+    # 닫힌 세션: 목록에도 agents.json 에도 없으면 결정 탭과 흐름 탭이 이름에서 T 번호를 읽는다
+    m = server.merge_decisions([{'id': 'D-1', 'title': 't', 'source': 'task-T20261101-03-old'}], [], {})
+    assert m['now'][0]['who'] == {'group': 'task', 'closed': True, 'task': 'T-20261101-03'}
+
+
 # layout: busy / wait / done, then task above resident above other, then latest activity first
 def test_arrange():
     rows = [A('r-done', 'resident', 9, kind='background', state='done', status='idle'),
@@ -412,12 +447,14 @@ def test_parents():
     tr('dead0001-0000', 'gone-supervisor', bash(T + 40, 'b7', 'claude --bg --name orphan', bg('ffff0001', 'orphan')))
     tr('c0de0001-0000', 'p', bash(T + 50, 'b8', 'claude --bg --name q', bg('c0de0002', 'q')))
     tr('c0de0002-0000', 'q', bash(T + 51, 'b9', 'claude --resume x --bg --name p', 'stopped c0de0001\nnote: started a copy as c0de0001'))
-    tr('0d0b0001-0000', 'hub', bash(T - 3600, 'b11', 'claude --bg --name early', bg('ea001001', 'early')))   # an earlier hub session
+    tr('0d0b0001-0000', 'hub', bash(T - 3600, 'b11', 'claude --bg --name early', bg('ea001001', 'early')),   # an earlier hub session
+       bash(T - 3500, 'b12', 'lk spawn --name task-T20261114-09-lk --cwd ~/w --verify "pytest"', bg('1c000001', 'task-T20261114-09-lk')))
     tr('oldsid', 'old', bash(T - 90 * 86400, 'b10', 'claude --bg --name w9', bg('9999aaaa', 'w9')), age=90 * 86400)   # outside the window
     found = server.launches(NOW * 1000 - 86400000, root=mp)
     assert found['aaaa0001'] == ('hubsid', 'hub') and found['dead0001'] == ('hubsid', 'hub') and 'cccc0004' not in found
     assert found['bbbb0001'][0] == found['bbbb0002'][0] == 'aaaa0001-0000' and '9999aaaa' not in found
     assert found['c0de0001'] == ('c0de0002-0000', 'q')   # `started a copy as`
+    assert found['1c000001'] == ('0d0b0001-0000', 'hub'), 'lk spawn 이 띄운 세션도 잇는다'
 
     row = lambda name, job: dict(name=name, id=job, sessionId=(job + '-0000') if job else name + 'sid')
     rows = [row('hub', None), row('task-a-supervisor', 'aaaa0001'), row('w1', 'bbbb0001'), row('w2', 'bbbb0002'),
