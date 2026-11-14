@@ -368,10 +368,10 @@ def close(a, claude):
     ok, why, _, _ = git_safety(r.get('cwd'))
     if not ok:
         raise Refuse(why)
-    code, out, err = claude(['stop', sid])   # 이미 멈춘 세션에도 0 이다(2.1.325 실측). 끝난 차례지만 살아 있는 세션도 멈춘다
+    code, out, err = claude(['stop', sid])   # 멈춘 세션에 다시 불러도 0 이었다(2.1.325). 끝난 차례지만 살아 있는 세션도 멈춘다
     sys.stdout.write(out)
-    if code != 0:
-        raise Fail('claude stop %s 이 실패했다: %s' % (sid, err.strip()[:300]))
+    if code != 0 and any(x.get('id') == sid for x in agents(claude)):   # 이미 끝나 목록에 없으면 멈출 것이 없다
+        raise Fail('claude stop %s 이 실패했고 세션이 아직 떠 있다: %s' % (sid, err.strip()[:300]))
     ok, why, branch, head = git_safety(r.get('cwd'))   # 멈추는 사이 커밋했을 수 있다
     if not ok:
         raise Refuse(why + '. 세션은 멈춰 두었다(claude attach %s 로 다시 연다)' % sid)

@@ -27,8 +27,8 @@ def git(repo, *args):
 class Claude:
     """claude agents, --bg, stop, rm 만 흉내 낸다. calls 에 부른 인자를 남긴다."""
 
-    def __init__(self, rows=(), rm_fails=False):
-        self.rows, self.calls, self.rm_fails = [dict(r) for r in rows], [], rm_fails
+    def __init__(self, rows=(), rm_fails=False, stop_fails=False):
+        self.rows, self.calls, self.rm_fails, self.stop_fails = [dict(r) for r in rows], [], rm_fails, stop_fails
 
     def __call__(self, args, cwd=None):
         self.calls.append((list(args), cwd))
@@ -41,6 +41,8 @@ class Claude:
                               'state': 'working', 'kind': 'background', 'startedAt': 1794600000000})
             return 0, 'backgrounded · abcd1234 · %s\n  claude attach abcd1234    open in this terminal\n' % name, ''
         if args[0] == 'stop':
+            if self.stop_fails:
+                return 1, '', 'cannot stop %s\n' % args[1]
             for r in self.rows:
                 if r.get('id') == args[1]:
                     r['state'] = 'done'
@@ -372,3 +374,14 @@ def test_close_record_failure_keeps_session(hub, tmp_path, capsys):
     c = Claude([task('task-T20261114-09-p', id='p1234567', cwd=str(d))])
     assert close(c, hub, 'p1234567') == 1
     assert '기록' in capsys.readouterr().err and not c.did('rm'), '기록을 못 남기면 지우지 않는다'
+
+
+def test_close_when_stop_fails(hub, tmp_path, capsys):
+    """stop 이 실패해도 그 세션이 이미 떠 있지 않으면(끝난 세션) 닫는다. 떠 있으면 지우지 않는다."""
+    d = tmp_path / 'plain'
+    d.mkdir()
+    c = Claude([task('task-T20261114-09-p', id='p1234567', cwd=str(d), state='done')], stop_fails=True)
+    assert close(c, hub, 'p1234567') == 0 and c.did('rm') == [['rm', 'p1234567']]
+    c = Claude([task('task-T20261114-09-q', id='q1234567', cwd=str(d), state='working')], stop_fails=True)
+    assert close(c, hub, 'q1234567') == 1
+    assert 'stop' in capsys.readouterr().err and not c.did('rm')
