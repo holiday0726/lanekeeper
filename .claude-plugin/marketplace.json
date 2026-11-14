@@ -9,7 +9,7 @@
     {
       "name": "lanekeeper",
       "source": "./",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "description": "에이전트 대시보드, 허브 폴더와 레인 쓰기 보호 훅, 설치 스킬 setup, 업데이트 스킬 update",
       "license": "MIT"
     }

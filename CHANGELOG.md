@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 (2026-11-14)
 
 A new skill `/lanekeeper:update` gets a new version and brings an existing hub folder up to the new templates, so you no longer compare files with `templates/hub/` by hand. The dashboard now shows which session started which, and the 3D office can be resized by dragging the line under it.
 
