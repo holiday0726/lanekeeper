@@ -305,3 +305,70 @@ def test_close_rm_failure_and_retry(hub, tmp_path, capsys):
     c.rm_fails = False
     assert close(c, hub, 'p1234567') == 0
     assert len(closed(hub)) == 1, '다시 닫아도 같은 세션 줄을 두 번 쓰지 않는다'
+
+
+def test_bin_wrapper_runs_lk():
+    """bin/lk(sh)가 Python 을 찾아 lk.py 까지 간다. 이름 검사에서 멈추니 claude 는 부르지 않는다."""
+    import shutil
+    sh = shutil.which('bash') or shutil.which('sh')
+    if not sh or 'system32' in sh.lower():   # Windows 의 WSL bash 는 Git Bash 가 아니다
+        pytest.skip('Git Bash 나 sh 없음')
+    r = subprocess.run([sh, os.path.join(ROOT, 'bin', 'lk'), 'spawn', '--cwd', '.', '--name', 'task-bad'], capture_output=True,
+                       timeout=60)
+    assert r.returncode == 2, (r.returncode, r.stdout, r.stderr)
+    assert 'task-T' in r.stderr.decode('utf-8', 'replace')
+
+
+def test_close_refuses_when_git_fails(hub, worker, tmp_path, monkeypatch, capsys):
+    """git 이 없거나 실패하면 안전한지 모르니 거부한다. 폴더 위로 .git 이 없을 때만 git 저장소가 아니라고 본다."""
+    wt, rows = worker
+    git(wt, 'push', '-q', 'origin', 'feat')
+    empty = tmp_path / 'nogit'
+    empty.mkdir()
+    monkeypatch.setenv('PATH', str(empty))
+    c = Claude(rows)
+    assert close(c, hub, 'task-T20261114-09-w') == 2
+    assert 'git' in capsys.readouterr().err and not c.did('stop')
+    plain = tmp_path / 'plain'
+    plain.mkdir()
+    assert lk.git_safety(str(plain))[:2] == (True, 'git 저장소 아님'), 'git 이 없어도 .git 이 없으면 저장소가 아니다'
+
+
+def test_close_refuses_when_status_fails(hub, worker, monkeypatch):
+    wt, rows = worker
+    git(wt, 'push', '-q', 'origin', 'feat')
+    (wt / 'b.txt').write_text('changed\n')
+    real = lk.git_run
+    monkeypatch.setattr(lk, 'git_run', lambda cwd, *a: (128, '', 'boom') if a[:1] == ('status',) else real(cwd, *a))
+    c = Claude(rows)
+    assert close(c, hub, 'task-T20261114-09-w') == 2 and not c.did('stop')
+
+
+def test_close_repo_root_with_other_worktrees(hub, worker, capsys):
+    """저장소 루트 세션: 다른 세션의 .claude/worktrees 는 내 변경이 아니다. 루트 밖 하위 폴더 변경은 본다."""
+    wt, rows = worker
+    repo = wt.parents[2]
+    c = Claude([task('task-T20261114-09-root', id='r1234567', sessionId='r-sid', cwd=str(repo))])
+    assert close(c, hub, 'task-T20261114-09-root') == 0, capsys.readouterr()
+    (repo / 'sub').mkdir()
+    (repo / 'a.txt').write_text('changed\n')
+    assert lk.git_safety(str(repo / 'sub'))[0] is False, '하위 폴더에서 열어도 저장소 전체 변경을 본다'
+
+
+def test_spawn_needs_cwd(hub, repo):
+    with pytest.raises(SystemExit):
+        spawn(Claude(), '--hub', str(hub), '--name', 'task-T20261114-09-a')
+
+
+def test_hub_dir_placeholder_ignored(hub, monkeypatch):
+    monkeypatch.setenv('LANEKEEPER_HUB_DIR', '<허브 폴더>')
+    assert lk.hub_dir('', str(hub)) == str(hub), '채우지 않은 자리표시는 없는 것으로 본다'
+
+
+def test_close_record_failure_keeps_session(hub, tmp_path, capsys):
+    d = tmp_path / 'plain'
+    d.mkdir()
+    (hub / '.lanekeeper').write_text('파일이라 폴더를 못 만든다')
+    c = Claude([task('task-T20261114-09-p', id='p1234567', cwd=str(d))])
+    assert close(c, hub, 'p1234567') == 1
+    assert '기록' in capsys.readouterr().err and not c.did('rm'), '기록을 못 남기면 지우지 않는다'

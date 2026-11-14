@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """lk: 작업 세션을 띄우고 닫는다. 허브와 슈퍼바이저가 claude --bg, claude rm 대신 쓴다(설정 예시가 그 둘을 deny 한다).
 
-  lk spawn --name task-T<YYYYMMDD>-<NN>-<주제> [--cwd <저장소>] [--effort high] [--verify "<명령>"]... [--hub <허브>]
+  lk spawn --name task-T<YYYYMMDD>-<NN>-<주제> --cwd <저장소> [--effort high] [--verify "<명령>"]... [--hub <허브>]
            [-- <claude 인자>...]
   lk close <이름 또는 id> [--hub <허브>]
 
@@ -16,12 +16,14 @@ spawn 기록: <허브>/.lanekeeper/tasks/<T>.json 과 <저장소 git 공통 폴�
   --verify 없이 같은 T 로 또 띄우면 앞의 verify 를 둔다. 다음 판의 lk verify 는 워커 worktree 에서
   git rev-parse --git-common-dir 로 이 파일을 찾고, 결과를 git rev-parse --git-dir 아래 lanekeeper/verify.jsonl 에 한 줄씩
   {"task", "cmd", "exit", "head", ...} 로 남긴다. 작업 트리 밖이라 "변경 없음" 검사에 걸리지 않는다.
-close: 세션 폴더가 git 이면 커밋하지 않은 변경(무시되지 않은 새 파일 포함)이 없고 HEAD 가 원격 추적 브랜치나
-  main/master 에 들어 있을 때만 claude stop, 기록, claude rm 순으로 닫는다. claude rm 이 worktree 와 그 git 폴더를 지우니
+close: 세션 폴더가 git 이면 커밋하지 않은 변경(무시되지 않은 새 파일 포함, <저장소>/.claude/worktrees 는 뺌)이 없고
+  HEAD 가 원격 추적 브랜치나 main/master 에 들어 있을 때만 claude stop, 기록, claude rm 순으로 닫는다.
+  git 이 없거나 실패하면 안전한지 모르니 거부한다. claude rm 이 worktree 와 그 git 폴더를 지우니
   기록이 먼저다. 기록은 <허브>/.lanekeeper/closed.jsonl 에 세션마다 한 줄(같은 sessionId 는 다시 쓰지 않음).
   토큰은 대시보드 claude_tokens() 와 같은 값이다(본문과 subagents, cache_read 는 total 밖에 따로).
   재지시(redirects)는 lk close 를 부른 세션(CLAUDE_CODE_SESSION_ID)이 그 세션에 보낸 메시지 수에서 첫 배정 하나를 뺀 값이다.
-종료 코드: 0 됨, 2 규칙으로 거부, 1 claude 나 git 실패.
+  부른 세션을 모르면(Claude 세션 밖에서 부름) 받은 메시지 전체에서 하나를 뺀다. 원래 수는 messages_in, from_caller 에 둔다.
+종료 코드: 0 됨, 2 규칙으로 거부(안전한지 모를 때 포함), 1 claude 실패나 기록 실패. 출력은 UTF-8 이다.
 """
 import argparse
 import json
@@ -60,14 +62,30 @@ def run_claude(args, cwd=None):
     return r.returncode, r.stdout or '', r.stderr or ''
 
 
-def git_out(cwd, *args):
-    """git 출력(앞뒤 공백 뺌), 실패하면 None."""
+def git_run(cwd, *args):
+    """(종료 코드, stdout, stderr). git 이 없거나 시간을 넘기면 None."""
     try:
         r = subprocess.run(['git', '-C', cwd] + list(args), capture_output=True, encoding='utf-8', errors='replace',
                            timeout=30)
     except (OSError, subprocess.SubprocessError):
         return None
-    return r.stdout.strip() if r.returncode == 0 else None
+    return r.returncode, r.stdout or '', r.stderr or ''
+
+
+def git_out(cwd, *args):
+    """git 출력(앞뒤 공백 뺌), 실패하면 None."""
+    r = git_run(cwd, *args)
+    return r[1].strip() if r and r[0] == 0 else None
+
+
+def in_git(cwd):
+    """cwd 나 그 위 폴더에 .git(폴더나 worktree 의 파일)이 있는지. git 의 오류 문구는 로캘마다 달라 기대지 않는다."""
+    d = os.path.abspath(cwd)
+    while not os.path.exists(os.path.join(d, '.git')):
+        if os.path.dirname(d) == d:
+            return False
+        d = os.path.dirname(d)
+    return True
 
 
 def iso(ts):
@@ -95,7 +113,7 @@ def is_hub(d):
 def hub_dir(arg, cwd):
     """--hub, LANEKEEPER_HUB_DIR, cwd 와 그 위 폴더 순. 못 찾으면 None."""
     for d in (arg, os.environ.get('LANEKEEPER_HUB_DIR', '')):
-        if d and d.strip():
+        if d and d.strip() and not ('<' in d and '>' in d):   # 채우지 않은 설정 예시 자리표시는 없는 것으로 본다
             return os.path.abspath(native(d))
     d = os.path.abspath(cwd)
     while True:
@@ -200,31 +218,61 @@ def spawn(a, extra, claude):
     m = server.BG_OUT.search(out)
     sess = {'name': a.name, 'id': m.group(1) if m else '', 'cwd': cwd, 'spawned_at': iso(time.time()),
             'by': caller(rows), 'args': args}
-    paths = record_spawn(hub, cwd, info['task'], a.verify, sess)
+    try:
+        paths = record_spawn(hub, cwd, info['task'], a.verify, sess)
+    except OSError as e:
+        raise Fail('세션은 떴지만(%s) 기록을 남기지 못했다: %s' % (sess['id'] or a.name, e))
     print('lk: 작업 세션 %d/%d. 기록 %s' % (len(tasks) + 1, limit, ', '.join(paths)))
     return 0
 
 
 def git_safety(cwd):
-    """(닫아도 되는지, 설명, 브랜치, HEAD). git 저장소가 아니면 지울 커밋이 없으니 된다."""
+    """(닫아도 되는지, 설명, 브랜치, HEAD). 위로 .git 이 없으면 지울 커밋이 없으니 된다.
+
+    .git 이 있는데 git 이 없거나 실패하거나 시간을 넘기면 안전한지 모르니 안 된다. 변경은 저장소 전체에서 보되
+    <저장소>/.claude/worktrees 는 다른 세션의 worktree 라 뺀다(저장소 루트에서 연 세션도 닫을 수 있게).
+    """
     if not cwd or not os.path.isdir(cwd):
         return True, '폴더 없음', '', ''
-    if git_out(cwd, 'rev-parse', '--show-toplevel') is None:
+    if not in_git(cwd):
         return True, 'git 저장소 아님', '', ''
-    dirty = (git_out(cwd, 'status', '--porcelain') or '').splitlines()
+
+    def failed(args, r):
+        why = (r[2].strip().splitlines() or ['종료 코드 %d' % r[0]])[-1][:200] if r else 'git 을 돌리지 못함'
+        return (False, 'git %s 이 실패해 브랜치가 안전한지 확인하지 못했다(%s). 원인을 고친 뒤 닫는다' % (args[0], why),
+                '', '')
+
+    args = ('status', '--porcelain', '--', ':/', ':(top,exclude).claude/worktrees')
+    r = git_run(cwd, *args)
+    if not r or r[0] != 0:
+        return failed(args, r)
+    dirty = [x for x in r[1].splitlines() if x.strip()]
     if dirty:
         return False, '커밋하지 않은 변경이 있다(%s%s). 커밋하고 push 하거나 병합한 뒤 닫는다' % (
             dirty[0].strip(), ' 외 %d개' % (len(dirty) - 1) if len(dirty) > 1 else ''), '', ''
-    head = git_out(cwd, 'rev-parse', 'HEAD')
-    branch = git_out(cwd, 'rev-parse', '--abbrev-ref', 'HEAD') or ''
-    if not head:
-        return True, '커밋 없음', branch, ''
-    remote = (git_out(cwd, 'for-each-ref', '--contains', head, '--format=%(refname)', 'refs/remotes') or '').split()
-    if remote:
-        return True, '원격에 있음: ' + remote[0], branch, head
+    r = git_run(cwd, 'rev-parse', '--verify', '-q', 'HEAD')
+    if r and r[0] == 1:
+        return True, '커밋 없음', '', ''
+    if not r or r[0] != 0:
+        return failed(('rev-parse',), r)
+    head = r[1].strip()
+    r = git_run(cwd, 'rev-parse', '--abbrev-ref', 'HEAD')
+    if not r or r[0] != 0:
+        return failed(('rev-parse',), r)
+    branch = r[1].strip()
+    r = git_run(cwd, 'for-each-ref', '--contains', head, '--format=%(refname)', 'refs/remotes')
+    if not r or r[0] != 0:
+        return failed(('for-each-ref',), r)
+    if r[1].split():
+        return True, '원격에 있음: ' + r[1].split()[0], branch, head
     for ref in ('main', 'master'):
-        if ref != branch and git_out(cwd, 'merge-base', '--is-ancestor', head, 'refs/heads/' + ref) is not None:
+        if ref == branch or git_out(cwd, 'rev-parse', '--verify', '-q', 'refs/heads/' + ref) is None:
+            continue
+        r = git_run(cwd, 'merge-base', '--is-ancestor', head, 'refs/heads/' + ref)
+        if r and r[0] == 0:
             return True, '병합됨: ' + ref, branch, head
+        if not r or r[0] != 1:
+            return failed(('merge-base',), r)
     return False, ('브랜치 %s 의 커밋 %s 가 원격에 없고 main 이나 master 에도 병합되지 않았다. '
                    'push 하거나 병합한 뒤 닫는다' % (branch, head[:8])), branch, head
 
@@ -329,7 +377,10 @@ def close(a, claude):
     if not ok:
         raise Refuse(why + '. 세션은 멈춰 두었다(claude attach %s 로 다시 연다)' % sid)
     path = os.path.join(hub, STATE, 'closed.jsonl')
-    append_once(path, close_record(r, rows, hub, why, branch, head))
+    try:
+        append_once(path, close_record(r, rows, hub, why, branch, head))
+    except OSError as e:
+        raise Fail('기록을 남기지 못해 지우지 않았다. 세션은 멈춰 두었다(claude attach %s 로 다시 연다): %s' % (sid, e))
     code, out, err = claude(['rm', sid])
     sys.stdout.write(out)
     sys.stderr.write(err)
@@ -349,7 +400,7 @@ def main(argv=None, claude=run_claude):
     sub = ap.add_subparsers(dest='cmd', required=True)
     sp = sub.add_parser('spawn', help='claude --bg 로 작업 세션을 띄운다')
     sp.add_argument('--name', required=True, help='task-T<YYYYMMDD>-<NN>-<주제>')
-    sp.add_argument('--cwd', default='.', help='세션을 열 저장소. 기본은 지금 폴더')
+    sp.add_argument('--cwd', required=True, help='세션을 열 저장소(허브 폴더에서 잘못 띄우지 않게 꼭 준다)')
     sp.add_argument('--effort', default='high', help='claude --effort. 기본 high, 복잡한 일은 xhigh')
     sp.add_argument('--verify', action='append', default=[], metavar='명령', help='완료 확인 명령(여러 번)')
     sp.add_argument('--hub', default='', help='허브 폴더')
@@ -370,5 +421,5 @@ def main(argv=None, claude=run_claude):
 
 if __name__ == '__main__':
     for s in (sys.stdout, sys.stderr):
-        s.reconfigure(errors='backslashreplace')   # Windows cp949 콘솔에서 못 찍는 글자로 죽지 않게
+        s.reconfigure(encoding='utf-8', errors='backslashreplace')   # Bash 도구가 UTF-8 로 읽는다(Windows 기본은 cp949)
     sys.exit(main())
