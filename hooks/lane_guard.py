@@ -78,7 +78,7 @@ def read_lanes(hub):
     둘 다 없거나 agents.json 에 "lanes" 가 없으면 ({}, 파일 또는 '', ''). 읽지 못하면 (None, 그 파일, 이유).
     agents.json 은 허브가 자주 고치는 명부라 깨지기 쉽다. lanes.json 으로 옮기면 명부가 깨져도 레인 보호가 남는다.
     """
-    path = os.path.join(native(hub), LANES)
+    path = os.path.normpath(os.path.join(native(hub), LANES))   # 알림에 쓰는 경로라 이 OS 꼴로
     d, why = read_json(path)
     if d is not None or why:
         if why:
@@ -87,7 +87,7 @@ def read_lanes(hub):
             return None, path, '"lanes" 키가 있는 JSON 객체가 아님'
         why = lanes_problem(d['lanes'])
         return (None, path, why) if why else (d['lanes'], path, '')
-    path = os.path.join(native(hub), 'agents.json')
+    path = os.path.normpath(os.path.join(native(hub), 'agents.json'))
     d, why = read_json(path)
     if d is None and not why:
         return {}, '', ''
