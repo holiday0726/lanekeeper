@@ -5,6 +5,8 @@
 ### Changed
 
 - Hub templates, rules that keep context from getting lost on hand-off. `COORDINATION.md` section 5: the `[배정]` assignment gets two new fields, `사용자 원문` (the user's words, quoted as said) and `허브 해석` (what the hub added: option names, summaries, advice), and a lane asks the hub back when the two disagree; lanes ask each other directly with `SendMessage`, and only decisions, changes to another lane's paths and shared resources go through the hub (all of it when `lane_message_hub_only` is on); work with many rounds with the user goes on in the lane session itself (`claude attach <name>`). `CLAUDE.md` "세션 다루기": the hub keeps its own words out of the user's quote and checks with the user first when it only half understands; it puts where the original report is under each summary it gives the user; before closing a session it checks that no other session relies on that session's temporary files or branch; the supervisor's assignment follows the format in `COORDINATION.md`. `CLAUDE.md` "decisions.json 갱신": a question waiting for the user's answer goes into `decisions.json` as `open` when asked, with the hub's advice in `detail`, so a new hub session knows what "as you advised" refers to.
+- README "From assignment to report": the user talks to the hub by default, and for work with many rounds goes into the lane session itself (`claude attach <name>`), as `COORDINATION.md` section 5 says. Before, it said the user talks only to the hub.
+- Hub template `CLAUDE.md`: `claude rm` removes the session's worktree folder and its work branch, so the hub does not close a session whose work is not merged or pushed yet. Before, it said only the folder.
 
 ## 0.7.0 (2026-11-14)
 

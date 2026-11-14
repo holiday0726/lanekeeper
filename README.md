@@ -29,7 +29,7 @@ The dashboard is in Korean, so its screenshots have Korean labels.
 
 ## From assignment to report
 
-The user talks only to the hub. The hub starts a task session and sends it an `[배정]` (assignment) message. When the task session is done it sends back a `[보고]` (report). The hub writes the result to `STATUS.md` and collects anything that needs a user decision in `decisions.json`, so the user can check it all at once on the dashboard.
+The user normally talks to the hub. The hub starts a task session and sends it an `[배정]` (assignment) message. When the task session is done it sends back a `[보고]` (report). The hub writes the result to `STATUS.md` and collects anything that needs a user decision in `decisions.json`, so the user can check it all at once on the dashboard. For work that takes many rounds with the user, such as refining a draft, the user goes into that task session (`claude attach <name>`) and talks there, and the session puts what was agreed in its report.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/en/flow-dark.png">
