@@ -31,7 +31,7 @@ function subFold(a) {
 }
 
 /* who started a session with `claude --bg` (server link_parents): the listed parent, or the starter that has closed */
-const hubRow = () => agents.find(a => a.lane === 'HUB')
+const hubRow = () => agents.find(a => a.lane === 'HUB' && a.group !== 'task') || agents.find(a => a.lane === 'HUB')
 function upOf(a) {
   const p = a.parent && a.parent !== hubRow()?.sessionId ? agents.find(b => b.sessionId === a.parent) : null
   return p ? p.name || p.sessionId.slice(0, 8) : null
@@ -104,7 +104,7 @@ function nodeCard(a, hub) {
 }
 function canvasEl() {
   const hubName = msgs24?.hub
-  const hubA = agents.find(a => a.lane === 'HUB') || agents.find(a => hubName && a.name === hubName)
+  const hubA = hubRow() || agents.find(a => hubName && a.name === hubName)
   const rest = agents.filter(a => a !== hubA)
   const ids = new Set(rest.map(a => a.sessionId)), kids = new Map()
   const up = a => a.parent && ids.has(a.parent) ? a.parent : null   // the server keeps parents a tree

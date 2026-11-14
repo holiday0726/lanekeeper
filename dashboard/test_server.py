@@ -121,6 +121,10 @@ def test_names_from_rows(tmp_path):
     n = server.names_of(rows, str(hub / 'agents.json'), str(hub))
     assert n['task-T20261114-09-a'] == {'group': 'task', 'lane': '', 'task': 'T-20261114-09'}, '파일이 깨져도 이름으로 나눈다'
     assert n['hub']['lane'] == 'HUB' and n['WF1']['group'] == 'other'
+    # 허브 폴더에서 띄운 작업 세션도 lane 은 HUB 지만 허브 자리는 상주 세션이 먼저다
+    two = {'task-T20261114-09-x': {'group': 'task', 'lane': 'HUB'}, 'hub': {'group': 'resident', 'lane': 'HUB'}}
+    assert server.hub_name(two) == 'hub' and server.hub_name({'w': {'lane': 'WEB'}}) is None
+    assert server.hub_name({'task-T20261114-09-x': {'group': 'task', 'lane': 'HUB'}}) == 'task-T20261114-09-x'
     # 닫힌 세션: 목록에도 agents.json 에도 없으면 결정 탭과 흐름 탭이 이름에서 T 번호를 읽는다
     m = server.merge_decisions([{'id': 'D-1', 'title': 't', 'source': 'task-T20261101-03-old'}], [], {})
     assert m['now'][0]['who'] == {'group': 'task', 'closed': True, 'task': 'T-20261101-03'}

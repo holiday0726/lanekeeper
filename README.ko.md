@@ -197,7 +197,7 @@ Copy-Item "$src\examples\supervisor.settings.json" "$hub\supervisor.settings.jso
 3. 사용자 설정(`~/.claude/settings.json`, Windows 는 `%USERPROFILE%\.claude\settings.json`)에 `examples/user.settings.json` 의 키를 손으로 합칩니다. `crossSessionInbound: "accept"` 가 있어야 세션 사이 메시지가 승인 대기 없이 바로 전달됩니다.
 4. `agents.json` 의 `resident.hub.cwd` 에 허브 폴더 경로를 넣고, 허브 세션 안에서 `/rename hub` 로 이름을 맞춥니다. 대시보드는 이 파일에서 `lane` 이 `HUB` 인 세션을 허브로 봅니다. `lanes.json` 의 `lanes` 에 레인마다 소유 경로를 적습니다(예: `"WEB": ["~/projects/web"]`). 레인 쓰기 보호 훅과 대시보드가 이것을 읽습니다. `lanes.json` 이 JSON 으로 읽히지 않으면 훅이 고칠 때까지 허브 폴더 밖 쓰기를 모두 막습니다. 일회성 세션은 어디에도 적지 않습니다. 대시보드가 `claude agents --json` 과 `task-T<YYYYMMDD>-<NN>-<주제>` 이름에서 읽습니다. `python3 ~/lanekeeper/scripts/lane_deny.py ~/hub` 가 1단계 `deny` 에 넣을 줄을 찍어 줍니다.
 5. `CLAUDE.md` 와 `COORDINATION.md` 의 `<...>` 자리에 레인, 저장소, 인터페이스를 적습니다.
-6. `CLAUDE.md` 에서 두 가지를 정합니다. "세션 다루기" 의 동시 작업 세션 상한(기본 8개)은 사용하는 PC 와 요금제에 맞게 바꿉니다. "하지 않는 것" 의 병합 위임은 선택입니다. 쓰지 않으면 그 줄을 지우고, 쓰면 허락 여부와 예외 저장소를 그 아래에 적습니다.
+6. 두 가지를 정합니다. 동시 작업 세션 상한(기본 8개)은 사용하는 PC 와 요금제에 맞게 `.claude/settings.json` 과 `supervisor.settings.json` 의 `env.LANEKEEPER_MAX_TASKS` 에서 바꿉니다. `lk spawn` 이 이 값으로 막습니다. `supervisor.settings.json` 의 `env.LANEKEEPER_HUB_DIR` 에는 허브 폴더를 넣습니다. `CLAUDE.md` "하지 않는 것" 의 병합 위임은 선택입니다. 쓰지 않으면 그 줄을 지우고, 쓰면 허락 여부와 예외 저장소를 그 아래에 적습니다.
 
 ## 대시보드
 
@@ -255,7 +255,7 @@ $env:HUB_DIR = "C:\Users\<나>\hub"; $env:PORT = "4990"; py -3 C:\Users\<나>\la
 | 훅 | 언제 | 하는 일 |
 |---|---|---|
 | 대시보드 열기 (`open_dashboard.py`) | 세션 시작(SessionStart) | 프로젝트 폴더가 `hub_dir` 이거나 그 아래일 때만 동작합니다. 대시보드가 꺼져 있으면 띄우고, `orca` 가 켜져 있으면 Orca 탭으로 엽니다. 떠 있는 서버가 다른 판이면 끄라고 알립니다([업데이트](#업데이트)) |
-| 레인 쓰기 보호 (`lane_guard.py`) | Edit, Write, NotebookEdit, Bash, SendMessage 직전 | 허브 폴더는 허브, 허브 `lanes.json`(0.7.1 까지는 `agents.json`)의 `lanes` 에 적은 경로는 그 레인의 것입니다. 이 파일이 읽히지 않으면 허브 폴더 밖 쓰기를 모두 막습니다. 세션은 연 폴더로 레인이 정해지고(`<저장소>/.claude/worktrees/` 아래 worktree 는 그 저장소 레인) 자기 레인에만 씁니다. 다른 곳에 쓰려 하면 막고 허브에 요청하라고 알립니다. Windows 경로는 대소문자와 역슬래시, `/c/` 꼴을 같은 경로로 봅니다. Bash 는 리다이렉트(`>`, `>>`), `tee`, `sed -i`, `cp`, `mv`, `rm`, `touch`, `mkdir`, `ln`, `dd of=`, `patch`, `find -delete`, 쓰는 git 명령(`git -C <경로>` 나 `cd` 뒤. `status`, `log`, `diff`, `fetch` 같은 읽기는 지나감)만 최선으로 봅니다. 변수, `bash -c`, 스크립트, 다른 명령은 지나가니 실수를 막는 장치이지 보안 경계가 아닙니다. 설정 `lane_message_hub_only` 를 켜면 워커는 허브에게만 `SendMessage` 합니다 |
+| 레인 쓰기 보호 (`lane_guard.py`) | Edit, Write, NotebookEdit, Bash, SendMessage 직전 | 허브 폴더는 허브, 허브 `lanes.json`(0.7.1 까지는 `agents.json`)의 `lanes` 에 적은 경로는 그 레인의 것입니다. `lanes.json` 이 읽히지 않거나, 그것이 없을 때 `lanes` 가 든 `agents.json` 이 읽히지 않으면 고칠 때까지 이 PC 의 모든 세션에서 허브 폴더 밖 쓰기를 막습니다. `lanes` 가 없는 `agents.json` 이 깨지면 예전처럼 허브 폴더만 지킵니다. 세션은 연 폴더로 레인이 정해지고(`<저장소>/.claude/worktrees/` 아래 worktree 는 그 저장소 레인) 자기 레인에만 씁니다. 다른 곳에 쓰려 하면 막고 허브에 요청하라고 알립니다. Windows 경로는 대소문자와 역슬래시, `/c/` 꼴을 같은 경로로 봅니다. Bash 는 리다이렉트(`>`, `>>`), `tee`, `sed -i`, `cp`, `mv`, `rm`, `touch`, `mkdir`, `ln`, `dd of=`, `patch`, `find -delete`, 쓰는 git 명령(`git -C <경로>` 나 `cd` 뒤. `status`, `log`, `diff`, `fetch` 같은 읽기는 지나감)만 최선으로 봅니다. 변수, `bash -c`, 스크립트, 다른 명령은 지나가니 실수를 막는 장치이지 보안 경계가 아닙니다. 설정 `lane_message_hub_only` 를 켜면 워커는 허브에게만 `SendMessage` 합니다 |
 
 ## 세션 명령 (`lk`)
 
@@ -263,8 +263,8 @@ $env:HUB_DIR = "C:\Users\<나>\hub"; $env:PORT = "4990"; py -3 C:\Users\<나>\la
 
 | 명령 | 하는 일 |
 |---|---|
-| `lk spawn --name task-T<YYYYMMDD>-<NN>-<주제> [--cwd <저장소>] [--effort high] [--verify "<명령>"]... [-- <claude 인자>]` | 다른 꼴의 이름을 거부하고, `claude agents --json` 에 이름이 `task-` 인 세션이 `LANEKEEPER_MAX_TASKS`(기본 8)개 떠 있으면 거부합니다. `claude --bg` 를 돌리고 그 출력을 그대로 보입니다. `--verify` 는 `<허브>/.lanekeeper/tasks/<T>.json` 과 저장소의 `git rev-parse --git-common-dir` 아래에 남깁니다 |
-| `lk close <이름 또는 id>` | 세션 폴더에 커밋하지 않은 변경이 없고 브랜치가 원격에 있거나 main 에 병합됐을 때만 닫습니다. `claude stop`, `<허브>/.lanekeeper/closed.jsonl` 에 한 줄(T 번호, 캐시 읽기를 뗀 토큰, 소요 시간, 재지시 수, verify 기록), `claude rm` 순입니다 |
+| `lk spawn --name task-T<YYYYMMDD>-<NN>-<주제> --cwd <저장소> [--effort high] [--verify "<명령>"]... [-- <claude 인자>]` | 다른 꼴의 이름을 거부하고, `claude agents --json` 에 이름이 `task-` 인 세션이 `LANEKEEPER_MAX_TASKS`(기본 8)개 떠 있으면 거부합니다. `claude --bg` 를 돌리고 그 출력을 그대로 보입니다. `--verify` 는 `<허브>/.lanekeeper/tasks/<T>.json` 과 저장소의 `git rev-parse --git-common-dir` 아래에 남깁니다 |
+| `lk close <이름 또는 id>` | 세션 폴더에 커밋하지 않은 변경이 없고(다른 세션의 `.claude/worktrees` 는 뺌) 브랜치가 원격에 있거나 main 에 병합됐을 때만 닫습니다. git 이 없거나 실패해도 거부합니다. `claude stop`, `<허브>/.lanekeeper/closed.jsonl` 에 한 줄(T 번호, 캐시 읽기를 뗀 토큰, 소요 시간, 재지시 수, verify 기록), `claude rm` 순입니다 |
 
 `lk` 는 허브 폴더를 `--hub`, `LANEKEEPER_HUB_DIR`, 지금 폴더와 그 위 폴더 순으로 찾습니다.
 

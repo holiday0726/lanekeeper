@@ -283,7 +283,7 @@ function updateHero() {
 }
 
 function officeSync() {
-  const o = hero.o, hubA = agents.find(a => a.lane === 'HUB') || agents.find(a => msgs24?.hub && a.name === msgs24.hub)
+  const o = hero.o, hubA = agents.find(a => a.lane === 'HUB' && a.group !== 'task') || agents.find(a => a.lane === 'HUB') || agents.find(a => msgs24?.hub && a.name === msgs24.hub)
   const rest = agents.filter(a => a !== hubA)
   const grew = officeLayout(rest.length)
   for (const [sid, f] of hero.figs) if (!agents.some(a => a.sessionId === sid)) { dropFigure(f); hero.figs.delete(sid) }

@@ -163,7 +163,13 @@ def names_of(rows, path=ROSTER, hub=HUB):
     return out
 
 
-SECTIONS =('busy', 'wait', 'done')    # 진행 중, 입력 대기, 종료 (top to bottom)
+def hub_name(names):
+    """The hub's session name: lane HUB, a resident before a task session someone started inside the hub folder."""
+    hubs = [n for n, r in names.items() if r.get('lane') == HUB_LANE]
+    return next((n for n in hubs if names[n].get('group') != 'task'), hubs[0] if hubs else None)
+
+
+SECTIONS = ('busy', 'wait', 'done')    # 진행 중, 입력 대기, 종료 (top to bottom)
 KIND_ORDER = {'task': 0, 'resident': 1, 'other': 2}
 
 
@@ -1039,7 +1045,7 @@ def messages(hours=24, now=None, root=PROJECTS, rows=(), names=None):
         nodes.append(dict(c, name=n, group=group, lane=r.get('lane', ''), listed=bool(a),
                           task=r.get('task') or (task_name(n) or {}).get('task', ''),
                           **{k: a.get(k) for k in ('state', 'status', 'kind', 'engine', 'sessionId')} if a else {}))
-    hub = next((n for n, r in names.items() if r.get('lane') == 'HUB'), None)
+    hub = hub_name(names)
     return {'hours': hours, 'hub': hub, 'nodes': nodes,   # nothing time-varying, so an unchanged answer is byte-identical
             'edges': sorted(edges.values(), key=lambda e: -e['count']), 'total': len(msgs),
             'messages': msgs[:MAX_MESSAGES]}
