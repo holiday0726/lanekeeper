@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.7.1 (2026-11-14)
+
+Hub template rules that keep context from getting lost on hand-off, and README wording. 0.7.0 was not published on its own, so coming from 0.6.0 read the 0.7.0 section below as well. To bring an existing hub folder up to the new templates, call `/lanekeeper:update` in the hub session.
 
 ### Changed
 
