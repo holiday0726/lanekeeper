@@ -77,7 +77,9 @@ claude plugin update lanekeeper@lanekeeper
 | `data` | 현황판, 명단, 결정, dev 점유 같은 사용자 데이터 | 손대지 않음 |
 | `merge`, `kept` | 사용자 설정(`settings.json`)에 더할 키, 이미 있는 키 | 없는 키만 더함 |
 
-`data` 줄에 `새 틀에 있는 키가 없음` 이 붙으면 그 키를 손으로 더할지 사용자에게 알린다(예: 0.6.0 의 `agents.json` `lanes`).
+`data` 줄에 `새 틀에 있는 키가 없음` 이 붙으면 그 키를 손으로 더할지 사용자에게 알린다.
+`migrate` 줄은 0.7 까지 `agents.json` 에 두던 `lanes` 를 새 `lanes.json` 으로 옮긴다는 뜻이다. `agents.json` 은 그대로 두니, 반영 뒤 그 `lanes` 키를 지울지 사용자에게 묻는다.
+`skip` 줄은 `agents.json` 이 깨져 `lanes.json` 을 만들지 않았다는 뜻이다. 사용자가 `agents.json` 을 고친 뒤 다시 돌린다.
 `<ROOT>/CHANGELOG.md` 에서 1단계 판보다 새 절을 요약해 함께 보여 준다.
 판이 같았으면 맨 위 절만 보여 준다.
 마지막 줄 JSON 의 `changed` 와 `base` 가 0 이고 `manual` 이 비어 있으면 허브가 이미 새 판에 맞으니 6단계로 간다.

@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+Lanes move out of `agents.json` into their own file, and starting and closing task sessions goes through a command instead of a rule in the hub template. To bring an existing hub folder up to it, call `/lanekeeper:update` in the hub session: it makes `lanes.json` from the `lanes` in `agents.json`. `.claude/settings.json` and `supervisor.settings.json` change in nested permission lines, so the update shows them for you to merge by hand.
+
+### Added
+
+- `bin/lk` (on the Bash tool's `PATH` while the plugin is enabled) and `scripts/lk.py`. `lk spawn --name task-T<YYYYMMDD>-<NN>-<topic> [--cwd <repo>] [--effort high] [--verify "<cmd>"]... [-- <claude args>]` refuses other names, refuses when `LANEKEEPER_MAX_TASKS` (default 8) sessions named `task-` are already running in `claude agents --json` (residents are not named `task-` and do not count), runs `claude --bg` and passes its output through. `--verify` goes to `<hub>/.lanekeeper/tasks/<T>.json` and to the repository's `git rev-parse --git-common-dir`, where the coming `lk verify` will find it. Nothing is registered in `agents.json`.
+- `lk close <name or id>` refuses unless the session folder has no uncommitted changes (untracked files that are not ignored count) and its HEAD is on a remote tracking branch or in `main` or `master`. Then `claude stop`, one line in `<hub>/.lanekeeper/closed.jsonl` (T number, tokens from the dashboard's `claude_tokens()` with cache reads apart, start and close time, messages the closing session sent to it minus the first assignment, verify records from `<git dir>/lanekeeper/verify.jsonl`) and `claude rm`, which is never given `--discard-unpushed`. The line is written before `claude rm` removes the worktree, and once per session.
+- `templates/hub/lanes.json`. A hub session's start message says when lanes are missing, still read from `agents.json`, or unreadable.
+
+### Changed
+
+- Lanes are read from `<hub>/lanes.json`. Without it, from `agents.json` as before. If the file the hook reads does not parse or has the wrong shape, the lane write guard blocks every write outside the hub folder, and the hub can still fix the file. Before, a broken `agents.json` silently left only the hub folder protected.
+- Lane write guard, Bash: also `rm`, `rmdir`, `unlink`, `touch`, `mkdir`, `truncate`, `ln`, `chmod`, `dd of=`, `patch` (`-d`, the file, or the folder it runs in), `find -delete`, the source of `mv`, and git commands that write, at `-C`, `--work-tree` or the folder after `cd` (reads such as `status`, `log`, `diff`, `fetch`, `branch -a` pass). `rm`, `mv` and `find -delete` on a folder that holds another lane are blocked too. `pushd` is followed, a `cd` inside parentheses ends there, and joined operators such as `);` now split commands. Variables and `bash -c` still get through.
+- Dashboard: a session whose name starts with `task-` is a task session and its T number comes from the name; residents still come from `agents.json`; the lane is `HUB` inside the hub folder, else the `agents.json` entry, else the `lanes.json` lane its folder is in. `task` entries written up to 0.7.1 are still read. A session started with `lk spawn` sits under its starter like one started with `claude --bg`.
+- `examples/hub.settings.json` and `examples/supervisor.settings.json`: `claude --bg` and `claude rm` move from `allow` to `deny` (with the `--background` and flag-later forms), `lk spawn` and `lk close` are allowed, and `env` sets `LANEKEEPER_MAX_TASKS` (and `LANEKEEPER_HUB_DIR` for supervisors).
+- Hub templates: start and close with `lk`, name task sessions `task-T<YYYYMMDD>-<NN>-<topic>`, and stop registering them in `agents.json`. The `agents.json` template keeps `resident` only.
+
 ## 0.7.1 (2026-11-14)
 
 Hub template rules that keep context from getting lost on hand-off, and README wording. 0.7.0 was not published on its own, so coming from 0.6.0 read the 0.7.0 section below as well. To bring an existing hub folder up to the new templates, call `/lanekeeper:update` in the hub session.
