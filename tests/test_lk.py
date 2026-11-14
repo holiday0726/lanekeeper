@@ -368,7 +368,7 @@ def test_hub_dir_placeholder_ignored(hub, monkeypatch):
 def test_close_record_failure_keeps_session(hub, tmp_path, capsys):
     d = tmp_path / 'plain'
     d.mkdir()
-    (hub / '.lanekeeper').write_text('파일이라 폴더를 못 만든다')
+    (hub / '.lanekeeper').write_text('a file, so no folder', encoding='utf-8')
     c = Claude([task('task-T20261114-09-p', id='p1234567', cwd=str(d))])
     assert close(c, hub, 'p1234567') == 1
     assert '기록' in capsys.readouterr().err and not c.did('rm'), '기록을 못 남기면 지우지 않는다'
