@@ -7,6 +7,8 @@ lanes.json 이 없으면 agents.json 의 "lanes"(0.7 까지의 자리)를 읽는
 허브 폴더 자체는 늘 HUB 레인 소유다. hub_dir 가 비어 있으면 아무것도 막지 않는다.
 상대 경로는 허브 폴더 기준이다. 경로가 겹치면 가장 깊은 쪽이 주인이다.
 레인 파일을 읽지 못하면(JSON 이 깨짐, 모양이 틀림) 레인을 모르니 허브 폴더 밖 쓰기를 모두 막는다. 허브는 허브 폴더를 고칠 수 있다.
+lanes.json 이 없을 때 깨진 agents.json 은 원문에 "lanes": 가 보일 때만 그렇게 하고, 안 보이면 잃을 레인이 없으니 허브 폴더만 지킨다.
+훅은 hub_dir 를 설정한 PC 의 모든 세션에서 도니, 막는 동안에는 허브와 무관한 세션도 막힌다.
 
 세션의 레인은 CLAUDE_PROJECT_DIR(없으면 입력의 cwd)이 든 경로의 레인이다. worktree 는 <저장소>/.claude/worktrees/ 아래라
 저장소 레인으로 잡힌다. 어느 레인에도 들지 않는 세션은 모든 소유 경로에 못 쓴다.
@@ -37,6 +39,7 @@ WRITE_TOOLS = ('Edit', 'Write', 'MultiEdit', 'NotebookEdit')
 SPLIT = {';', ';;', '&&', '||', '|', '&', '|&', '(', ')'}
 REDIRECT = {'>', '>>', '>|', '&>', '&>>', '>&'}
 WRAPPERS = ('sudo', 'command', 'builtin', 'env', 'nohup', 'time', 'exec', 'timeout', 'nice', 'stdbuf')
+KEYWORDS = ('if', 'then', 'else', 'elif', 'while', 'until', 'do', '{', '!')
 WRAPPER_ARGS = {'sudo': ('-u', '-g', '-C', '-D', '-h', '-p', '-r', '-t', '-U'), 'env': ('-u', '-C', '-S'),
                 'nice': ('-n',), 'timeout': ('-s', '-k', '--signal', '--kill-after'), 'stdbuf': ('-i', '-o', '-e')}
 SEP_CHARS = set(';&|()\n')
@@ -92,7 +95,13 @@ def read_lanes(hub):
     if d is None and not why:
         return {}, '', ''
     if why or not isinstance(d, dict):
-        return None, path, why or 'JSON 객체가 아님'
+        # 깨진 명부에 lanes 가 보이면 잃는 레인이 있으니 읽지 못함이다. 안 보이면(nipa 처럼 처음부터 없음) 잃을 것이 없다
+        try:
+            with open(path, encoding='utf-8-sig', errors='replace') as f:
+                had = re.search(r'"lanes"\s*:', f.read())
+        except OSError:
+            had = True
+        return (None, path, why or 'JSON 객체가 아님') if had else ({}, path, '')
     why = 'lanes' in d and lanes_problem(d['lanes'])
     return (None, path, why) if why else (d.get('lanes') or {}, path, '')
 
@@ -178,7 +187,7 @@ def sed_files(args):
 GIT_READ = {'status', 'log', 'diff', 'show', 'blame', 'annotate', 'grep', 'describe', 'shortlog', 'rev-parse', 'rev-list',
             'ls-files', 'ls-tree', 'ls-remote', 'cat-file', 'merge-base', 'name-rev', 'for-each-ref', 'show-ref',
             'show-branch', 'whatchanged', 'var', 'help', 'version', 'count-objects', 'check-ignore', 'check-attr',
-            'fetch', 'cherry', 'range-diff', 'archive', 'difftool', 'verify-commit', 'verify-tag', 'fsck'}
+            'fetch', 'cherry', 'range-diff', 'archive', 'difftool', 'verify-commit', 'verify-tag', 'fsck', 'merge-tree'}
 GIT_OPT_ARG = {'-C', '-c', '--git-dir', '--work-tree', '--namespace', '--config-env', '--super-prefix'}
 BRANCH_WRITE = {'-d', '-D', '--delete', '-m', '-M', '--move', '-c', '-C', '--copy', '-f', '--force', '-u',
                 '--set-upstream-to', '--unset-upstream', '--edit-description', '-t', '--track', '--no-track',
@@ -209,7 +218,11 @@ def git_reads(sub, rest):
         return not opts & TAG_WRITE and (not pos or bool(opts & TAG_LIST))
     if sub == 'config':
         return bool(opts & CONFIG_READ) or first in ('get', 'list') or len(pos) == 1 and not opts & CONFIG_WRITE
-    return {'remote': not pos or first in ('show', 'get-url'), 'stash': first in ('list', 'show'),
+    if sub == 'format-patch':
+        return '--stdout' in opts
+    if sub == 'apply':
+        return bool(opts & {'--check', '--stat', '--numstat', '--summary'})
+    return {'remote': not pos or first in ('show', 'get-url', 'update', 'prune'), 'stash': first in ('list', 'show'),
             'worktree': first == 'list', 'reflog': not pos or first in ('show', 'exists'),
             'notes': not pos or first in ('list', 'show'), 'submodule': not pos or first in ('status', 'summary')
             }.get(sub, False)
@@ -247,6 +260,8 @@ def strip_wrappers(args):
         a = args[0]
         if '=' in a and not a.startswith('-'):
             args.pop(0)
+        elif a in KEYWORDS:
+            args.pop(0)                               # if, then, do, {, ! 뒤가 명령이다
         elif a in WRAPPERS:
             args.pop(0)
             while args and args[0].startswith('-'):
@@ -341,6 +356,8 @@ def bash_targets(cmd):
         args, it = [], iter(cur)
         for w in it:
             if w in REDIRECT:
+                if args and re.fullmatch(r'\d{1,2}', args[-1]):
+                    args.pop()                        # 2>/dev/null 의 2 는 fd 다. shlex 가 2 와 > 로 나눈다
                 nxt = next(it, '')
                 if nxt and not nxt.isdigit() and nxt != '-':
                     out.append((nxt, base, False))
@@ -407,8 +424,8 @@ def check(inp, hub, project='', nt=NT, roster=None, message_hub_only=False, lane
                 return '허브 폴더 파일은 허브만 고친다. 바꿀 내용은 SendMessage 로 허브 세션에 보고해라. (%s)' % f
             return '%s 는 레인 %s 소유다. 고칠 일은 SendMessage 로 허브에 요청해라.' % (f, lane)
         if got is None and lane != HUB:
-            return ('레인 정의 %s 를 읽지 못해(%s) 허브 폴더 밖 쓰기를 모두 막는다. 허브가 이 파일을 고치면 풀린다. '
-                    '워커는 SendMessage 로 허브에 알려라. (%s)' % (where, why, f))
+            return ('레인 정의 %s 를 읽지 못해(%s) 허브 폴더 밖 쓰기를 모두 막는다. 허브 세션이나 사용자가 이 파일을 고치면 '
+                    '풀린다. 허브 팀 세션이면 SendMessage 로 허브에 알린다. (%s)' % (where, why, f))
         under = dele and next(((r, n) for r, n in roots if n != mine and inside(r, path)), None)
         if under:
             return '%s 아래에 레인 %s 경로(%s)가 있다. 지울 일은 SendMessage 로 허브에 요청해라.' % (f, under[1], under[0])

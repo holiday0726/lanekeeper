@@ -116,6 +116,8 @@ BYPASS = [
     ('cd 뒤 리다이렉트', 'cd ../api; echo x > a.txt', True),
     ('cp', 'cp a.txt /c/p/api/', True),
     ('cp', 'cp -t ../api a.txt', True),
+    ('cp', 'cp a.txt /c/p/api/a.txt 2>/dev/null', True),
+    ('cp', 'install -m 644 x /c/p/api/x 2>&1 | tail -1', True),
     ('히어독', "cat > /c/p/api/n.md <<'EOF'\nhi\nEOF", True),
     ('히어독', 'cd ../api && cat <<EOF > n.md\nhi\nEOF', True),
     ('cd 뒤 git commit', 'cd ../api; git commit -am x', True),
@@ -145,6 +147,10 @@ BYPASS = [
     ('읽기는 통과', 'git -C ../api log --oneline -5', False),
     ('읽기는 통과', 'cd ../api && git diff && git branch -a', False),
     ('읽기는 통과', 'git -C /c/p/api fetch', False),
+    ('읽기는 통과', 'git -C /c/p/api branch 2>/dev/null', False),
+    ('읽기는 통과', 'cd ../api && git remote 2>&1 | head -3', False),
+    ('셸 예약어 뒤', 'if true; then rm -rf /c/p/api/src; fi', True),
+    ('셸 예약어 뒤', '{ touch /c/p/api/x; }', True),
     ('자기 레인은 통과', 'git commit -am x && rm -rf build && touch y', False),
 ]
 
@@ -207,9 +213,11 @@ def test_read_lanes(tmp_path):
         lanes, where, why = read_lanes(str(hub))
         assert lanes is None and where == str(hub / 'lanes.json') and why, bad
     (hub / 'lanes.json').unlink()
-    write(hub / 'agents.json', '{"resident": ')
+    write(hub / 'agents.json', '{"resident": {}, "lanes": {"WEB": [')
     lanes, where, why = read_lanes(str(hub))
-    assert lanes is None and where == str(hub / 'agents.json') and why, 'lanes.json 이 없을 때 깨진 agents.json'
+    assert lanes is None and where == str(hub / 'agents.json') and why, 'lanes 가 든 agents.json 이 깨지면 레인을 잃는다'
+    write(hub / 'agents.json', '{"resident": {"hub": ')
+    assert read_lanes(str(hub)) == ({}, str(hub / 'agents.json'), ''), 'lanes 가 없던 명부가 깨지면 잃을 레인이 없다'
     write(hub / 'agents.json', {'lanes': 'WEB'})
     assert read_lanes(str(hub))[0] is None
 
@@ -278,6 +286,22 @@ def test_read_lanes(tmp_path):
     ('git -C /x config --get user.name', []),
     ('git -C /x config user.name', []),
     ('git --version', []),
+    ('git -C /x branch 2>/dev/null', ['/dev/null']),                  # fd 숫자는 인자가 아니다
+    ('git -C /x log 2>&1 | tail -3', []),
+    ('cp a /x/b 2>/dev/null', ['/dev/null', '/x/b']),
+    ('ln -s a /x/b 2> err.log', ['err.log', '/x/b']),
+    ('echo 12 > f', ['f']),
+    ('if true; then rm -rf /x; fi', ['/x']),
+    ('for f in a; do touch /x/$f; done', ['/x/$f']),
+    ('{ touch /x/y; }', ['/x/y']),
+    ('! git -C /x commit', ['/x']),
+    ('while git -C /x pull; do :; done', ['/x']),
+    ('git -C /x format-patch --stdout HEAD~1', []),
+    ('git -C /x format-patch HEAD~1', ['/x']),
+    ('git -C /x apply --check p.diff', []),
+    ('git -C /x apply p.diff', ['/x']),
+    ('git -C /x merge-tree a b', []),
+    ('git -C /x remote update', []),
     ('d=/x; touch $d/y', ['$d/y']),                                    # 변수는 풀지 않는다(문서에 적은 한계)
     ("bash -c 'touch /x/y'", []),                                      # bash -c 안은 보지 않는다(문서에 적은 한계)
     ('echo "unclosed', []),
@@ -339,9 +363,13 @@ def test_hook_process(tmp_path):
     assert run(tmp_path, W(str(hub / 'STATUS.md'), str(web)), web, hub_dir='') == (0, '')
     assert run(tmp_path, M('someone', str(web)), web)[0] == 0
     assert run(tmp_path, M('someone', str(web)), web, 'true')[0] == 2
-    (hub / 'agents.json').write_text('{broken', encoding='utf-8')
+    (hub / 'agents.json').write_text('{"resident": {}, "lanes": {"WEB": [', encoding='utf-8')
     code, err = run(tmp_path, W(str(web / 'a.py'), str(web)), web)
-    assert code == 2 and 'agents.json' in err, 'lanes.json 이 없을 때 깨진 agents.json 이면 허브 폴더 밖 쓰기를 막는다'
+    assert code == 2 and 'agents.json' in err, 'lanes 가 든 agents.json 이 깨지면 허브 폴더 밖 쓰기를 막는다'
+    (hub / 'agents.json').write_text('{"resident": {"hub": ', encoding='utf-8')
+    assert run(tmp_path, W(str(web / 'a.py'), str(web)), web) == (0, ''), 'nipa 모양 명부가 깨지면 예전처럼 허브 폴더만'
+    assert run(tmp_path, W(str(hub / 'STATUS.md'), str(web)), web)[0] == 2
+    (hub / 'agents.json').write_text('{"resident": {}, "lanes": {"WEB": [', encoding='utf-8')
     assert run(tmp_path, W(str(hub / 'STATUS.md'), str(hub)), hub) == (0, ''), '허브는 허브 폴더를 고칠 수 있다'
     (hub / 'lanes.json').write_text(json.dumps({'lanes': {'WEB': [str(web)], 'API': [str(api)]}}), encoding='utf-8')
     assert run(tmp_path, W(str(web / 'a.py'), str(web)), web) == (0, ''), 'lanes.json 이 있으면 명부가 깨져도 레인 보호가 남는다'
