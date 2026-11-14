@@ -124,6 +124,45 @@ def test_keeps_existing_files():
     assert os.path.isfile(os.path.join(hub, 'COORDINATION.md')), '없는 파일은 채움'
 
 
+# 4b. lanes.json 은 agents.json 의 lanes(0.7 까지의 자리)를 옮겨 만든다. 틀의 자리표시가 실제 레인을 가리면 안 된다
+def test_lanes_migrated_from_agents():
+    tmp = tempfile.mkdtemp()
+    home, hub = os.path.join(tmp, 'home'), os.path.join(tmp, 'hub')
+    lanes = {'WEB': ['~/projects/web'], 'API': '~/projects/api'}
+    roster = {'resident': {'hub': {'lane': 'HUB', 'cwd': hub}}, 'lanes': lanes}
+    write(os.path.join(hub, 'agents.json'), json.dumps(roster))
+    out, _ = run(home, hub)
+    got = load(os.path.join(hub, 'lanes.json'))
+    assert got['lanes'] == lanes and got['_note'], got
+    assert 'migrated' in out and 'lanes.json' in out, out
+    assert load(os.path.join(hub, 'agents.json')) == roster, 'agents.json 은 그대로 둔다'
+    before = snapshot(tmp)
+    run(home, hub)
+    assert snapshot(tmp) == before, '다시 돌리면 바뀐 것이 없음'
+
+
+# 4c. agents.json 이 깨져 있으면 lanes.json 을 만들지 않는다(틀이 깨진 명부 대신 읽히면 레인 보호가 조용히 꺼진다)
+def test_lanes_not_created_from_broken_agents():
+    tmp = tempfile.mkdtemp()
+    home, hub = os.path.join(tmp, 'home'), os.path.join(tmp, 'hub')
+    write(os.path.join(hub, 'agents.json'), '{"lanes": {"WEB": [')
+    out, _ = run(home, hub)
+    assert not os.path.exists(os.path.join(hub, 'lanes.json')), out
+    assert 'skipped' in out and 'agents.json' in out, out
+
+
+# 4d. 새 허브의 agents.json 틀에는 lanes 와 task 가 없고, lanes.json 틀은 가드가 읽을 수 있다
+def test_new_hub_lanes_template():
+    tmp = tempfile.mkdtemp()
+    home, hub = os.path.join(tmp, 'home'), os.path.join(tmp, 'hub')
+    run(home, hub)
+    assert 'lanes' not in load(os.path.join(hub, 'agents.json')) and 'task' not in load(os.path.join(hub, 'agents.json'))
+    sys.path.insert(0, os.path.join(REPO, 'hooks'))
+    from lane_guard import read_lanes
+    lanes, where, why = read_lanes(hub)
+    assert lanes is not None and where.endswith('lanes.json') and not why, (lanes, where, why)
+
+
 # 5. 사용자 설정이 JSON 으로 안 읽히면 아무것도 쓰지 않고 멈춘다
 def test_broken_user_settings_stops():
     tmp = tempfile.mkdtemp()

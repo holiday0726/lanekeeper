@@ -18,9 +18,10 @@ Claude Code 세션 하나를 허브로 두고, 허브가 다른 세션들에 일
 
 | 구성 | 위치 | 하는 일 |
 |---|---|---|
-| 허브 규칙 틀 | `templates/hub/` | 허브의 역할과 스킬 쓰는 때(`CLAUDE.md`), 세션 사이 약속과 보고 형식(`COORDINATION.md`), 현황판(`STATUS.md`)과 빈 데이터 파일 셋 |
+| 허브 규칙 틀 | `templates/hub/` | 허브의 역할과 스킬 쓰는 때(`CLAUDE.md`), 세션 사이 약속과 보고 형식(`COORDINATION.md`), 현황판(`STATUS.md`)과 빈 데이터 파일 넷 |
 | 대시보드 | `dashboard/` | 떠 있는 세션, 사용자 결정, 현황, 세션 사이 메시지를 보여 주는 읽기 전용 웹 화면. Python 표준 라이브러리만 씁니다 |
 | 훅 | `hooks/` | 허브 폴더에서 세션을 열면 대시보드를 띄우고, 세션이 허브 폴더나 다른 레인 경로에 쓰지 못하게 막습니다 |
+| 세션 명령 | `bin/lk` | `lk spawn` 과 `lk close`: 이름 규칙과 동시 세션 상한 안에서 작업 세션을 띄우고, 브랜치가 안전할 때만 토큰과 소요 시간 기록을 남기고 닫습니다 |
 | 스킬 | `skills/` | 설치 마무리 `setup`, 새 판 받기와 허브 폴더 맞추기 `update` |
 | 설치 스크립트 | `scripts/` | `setup` 스킬이 부르는 `setup_hub.py`(허브 폴더 복사와 설정 합치기), `update` 스킬이 부르는 `update_hub.py`(허브 폴더를 새 틀에 맞추기) |
 | 설정 예시 | `examples/` | 허브와 슈퍼바이저 세션의 권한, 기본 모델 같은 설정 견본 |
@@ -100,7 +101,7 @@ claude
 2. 허브 폴더를 새 판의 틀과 비교해 미리 보여 주고, CHANGELOG 에서 그사이 바뀐 것을 요약합니다. 이 단계는 아무것도 바꾸지 않습니다.
 3. 반영하겠다고 답하면 `<허브 폴더>/.lanekeeper/backup-<시각>/` 에 백업한 뒤 바꿉니다.
    - 규칙 문서(`CLAUDE.md`, `COORDINATION.md`)와 설정(`.claude/settings.json`, `supervisor.settings.json`): 사용자가 고친 줄은 두고 틀이 바뀐 곳만 넣습니다. 같은 곳을 둘 다 고쳤으면 손대지 않고 무엇을 넣을지 제안합니다. 설정 JSON 은 새로 생긴 최상위 키만 더하고 권한 줄 같은 안쪽 값은 보여 주기만 합니다.
-   - 현황판, 명단, 결정, dev 점유(`STATUS.md`, `agents.json`, `decisions.json`, `dev-occupancy.json`): 없을 때만 만들고 있는 파일은 건드리지 않습니다.
+   - 현황판, 명단, 레인, 결정, dev 점유(`STATUS.md`, `agents.json`, `lanes.json`, `decisions.json`, `dev-occupancy.json`): 없을 때만 만들고 있는 파일은 건드리지 않습니다. `lanes.json` 이 없는 허브는 `agents.json` 의 `lanes` 로 만듭니다(`migrate`).
    - 사용자 설정(`~/.claude/settings.json`): `/lanekeeper:setup` 처럼 없는 키만 더합니다.
 4. 되돌리는 명령을 알려 줍니다. `update_hub.py <허브 폴더> --restore <백업 폴더>` 가 허브 폴더를 반영 전으로 돌립니다.
 
@@ -194,13 +195,13 @@ Copy-Item "$src\examples\supervisor.settings.json" "$hub\supervisor.settings.jso
 1. `.claude/settings.json`: 허브 세션의 모델과 권한입니다. `deny` 의 `<레인 저장소>` 자리에 허브가 직접 고치면 안 되는 저장소를, `additionalDirectories` 에 그 저장소들의 상위 폴더를 넣습니다.
 2. `supervisor.settings.json`: 허브가 슈퍼바이저 세션을 띄울 때 `--settings` 로 붙이는 파일입니다. 슈퍼바이저에게 허락할 일을 `autoMode.allow` 에 문장으로 적습니다.
 3. 사용자 설정(`~/.claude/settings.json`, Windows 는 `%USERPROFILE%\.claude\settings.json`)에 `examples/user.settings.json` 의 키를 손으로 합칩니다. `crossSessionInbound: "accept"` 가 있어야 세션 사이 메시지가 승인 대기 없이 바로 전달됩니다.
-4. `agents.json` 의 `resident.hub.cwd` 에 허브 폴더 경로를 넣고, 허브 세션 안에서 `/rename hub` 로 이름을 맞춥니다. 대시보드는 이 파일에서 `lane` 이 `HUB` 인 세션을 허브로 봅니다. `lanes` 에는 레인마다 소유 경로를 적습니다(예: `"WEB": ["~/projects/web"]`). 레인 쓰기 보호 훅이 이것을 읽습니다. `python3 ~/lanekeeper/scripts/lane_deny.py ~/hub` 가 1단계 `deny` 에 넣을 줄을 찍어 줍니다.
+4. `agents.json` 의 `resident.hub.cwd` 에 허브 폴더 경로를 넣고, 허브 세션 안에서 `/rename hub` 로 이름을 맞춥니다. 대시보드는 이 파일에서 `lane` 이 `HUB` 인 세션을 허브로 봅니다. `lanes.json` 의 `lanes` 에 레인마다 소유 경로를 적습니다(예: `"WEB": ["~/projects/web"]`). 레인 쓰기 보호 훅과 대시보드가 이것을 읽습니다. `lanes.json` 이 JSON 으로 읽히지 않으면 훅이 고칠 때까지 허브 폴더 밖 쓰기를 모두 막습니다. 일회성 세션은 어디에도 적지 않습니다. 대시보드가 `claude agents --json` 과 `task-T<YYYYMMDD>-<NN>-<주제>` 이름에서 읽습니다. `python3 ~/lanekeeper/scripts/lane_deny.py ~/hub` 가 1단계 `deny` 에 넣을 줄을 찍어 줍니다.
 5. `CLAUDE.md` 와 `COORDINATION.md` 의 `<...>` 자리에 레인, 저장소, 인터페이스를 적습니다.
-6. `CLAUDE.md` 에서 두 가지를 정합니다. "세션 다루기" 의 동시 작업 세션 상한(기본 8개)은 사용하는 PC 와 요금제에 맞게 바꿉니다. "하지 않는 것" 의 병합 위임은 선택입니다. 쓰지 않으면 그 줄을 지우고, 쓰면 허락 여부와 예외 저장소를 그 아래에 적습니다.
+6. 두 가지를 정합니다. 동시 작업 세션 상한(기본 8개)은 사용하는 PC 와 요금제에 맞게 `.claude/settings.json` 과 `supervisor.settings.json` 의 `env.LANEKEEPER_MAX_TASKS` 에서 바꿉니다. `lk spawn` 이 이 값으로 막습니다. `supervisor.settings.json` 의 `env.LANEKEEPER_HUB_DIR` 에는 허브 폴더를 넣습니다. `CLAUDE.md` "하지 않는 것" 의 병합 위임은 선택입니다. 쓰지 않으면 그 줄을 지우고, 쓰면 허락 여부와 예외 저장소를 그 아래에 적습니다.
 
 ## 대시보드
 
-허브 폴더의 `agents.json`, `decisions.json`, `STATUS.md`, `dev-occupancy.json` 과 `~/.claude` 아래 세션 기록을 몇 초마다 읽어 보여 줍니다. 읽기만 하고, 세션에 입력을 보내거나 멈추지 않습니다.
+허브 폴더의 `agents.json`, `lanes.json`, `decisions.json`, `STATUS.md`, `dev-occupancy.json` 과 `~/.claude` 아래 세션 기록을 몇 초마다 읽어 보여 줍니다. 읽기만 하고, 세션에 입력을 보내거나 멈추지 않습니다.
 
 <img alt="대시보드 오피스 장면: 허브가 배정을 보내면 허브 자리에서 세션 책상으로 오렌지 서류가 날아가고, 작업 중인 세션은 켜진 모니터 앞에서 일하고 쉬는 세션은 라운지에 앉아 있습니다" src="docs/images/demo.gif" width="800">
 
@@ -213,7 +214,7 @@ Copy-Item "$src\examples\supervisor.settings.json" "$hub\supervisor.settings.jso
 
 | 탭 | 보여 주는 것 |
 |---|---|
-| 에이전트 | 허브를 가운데 둔 흐름도나 카드 목록이고, 세션을 누르면 대화 기록과 `claude logs` 화면이 나옵니다. `3D 오피스` 단추로 켜면(선택, 그때 three.js 를 불러옴) 위에 아이소메트릭 오피스가 나옵니다. 세션마다 책상이 있고, 작업 중이면 앉아서 일하고, 사용자를 기다리면 오렌지 `!` 를 띄우고, 쉬면 라운지로 걸어갑니다. 배정과 보고 서류가 허브와 책상 사이를 날아갑니다. 오피스 아래 구분선을 끌거나 화살표 키로 오피스 높이를 바꾸고, 끝까지 올리면 접힙니다. WebGL 이 없으면 오피스와 구분선은 숨습니다. 다른 세션이 `claude --bg` 로 띄운 세션(예: 슈퍼바이저가 띄운 세션)은 흐름도에서 띄운 세션 아래에 들어가고, 목록 카드에는 상위 세션이 붙습니다. 띄운 세션의 기록에 남은 `claude --bg` 결과로 정하고 추정하지 않습니다 |
+| 에이전트 | 허브를 가운데 둔 흐름도나 카드 목록이고, 세션을 누르면 대화 기록과 `claude logs` 화면이 나옵니다. `3D 오피스` 단추로 켜면(선택, 그때 three.js 를 불러옴) 위에 아이소메트릭 오피스가 나옵니다. 세션마다 책상이 있고, 작업 중이면 앉아서 일하고, 사용자를 기다리면 오렌지 `!` 를 띄우고, 쉬면 라운지로 걸어갑니다. 배정과 보고 서류가 허브와 책상 사이를 날아갑니다. 오피스 아래 구분선을 끌거나 화살표 키로 오피스 높이를 바꾸고, 끝까지 올리면 접힙니다. WebGL 이 없으면 오피스와 구분선은 숨습니다. 다른 세션이 `lk spawn` 이나 `claude --bg` 로 띄운 세션(예: 슈퍼바이저가 띄운 세션)은 흐름도에서 띄운 세션 아래에 들어가고, 목록 카드에는 상위 세션이 붙습니다. 띄운 세션의 기록에 남은 `claude --bg` 결과로 정하고 추정하지 않습니다 |
 | 결정 | `decisions.json` 의 결정 항목과 지금 사용자 입력을 기다리는 세션 |
 | 현황 | `STATUS.md` |
 | 흐름 | 세션 사이 `SendMessage` 를 그래프와 목록으로. 그래프는 기본이 기울어진 입체이고(끌거나 화살표 키로 돌림) 평면으로 바꿀 수 있습니다. `[배정]`, `[보고]`, `[알림]` 머리말로 종류를 나눕니다 |
@@ -254,7 +255,18 @@ $env:HUB_DIR = "C:\Users\<나>\hub"; $env:PORT = "4990"; py -3 C:\Users\<나>\la
 | 훅 | 언제 | 하는 일 |
 |---|---|---|
 | 대시보드 열기 (`open_dashboard.py`) | 세션 시작(SessionStart) | 프로젝트 폴더가 `hub_dir` 이거나 그 아래일 때만 동작합니다. 대시보드가 꺼져 있으면 띄우고, `orca` 가 켜져 있으면 Orca 탭으로 엽니다. 떠 있는 서버가 다른 판이면 끄라고 알립니다([업데이트](#업데이트)) |
-| 레인 쓰기 보호 (`lane_guard.py`) | Edit, Write, NotebookEdit, Bash, SendMessage 직전 | 허브 폴더는 허브, 허브 `agents.json` 의 `lanes` 에 적은 경로는 그 레인의 것입니다. 세션은 연 폴더로 레인이 정해지고(`<저장소>/.claude/worktrees/` 아래 worktree 는 그 저장소 레인) 자기 레인에만 씁니다. 다른 곳에 쓰려 하면 막고 허브에 요청하라고 알립니다. Windows 경로는 대소문자와 역슬래시, `/c/` 꼴을 같은 경로로 봅니다. Bash 는 리다이렉트(`>`, `>>`), `tee`, `sed -i`, `cp`, `mv` 만 최선으로 봅니다. 변수, 스크립트, 다른 명령은 지나가니 실수를 막는 장치이지 보안 경계가 아닙니다. 설정 `lane_message_hub_only` 를 켜면 워커는 허브에게만 `SendMessage` 합니다 |
+| 레인 쓰기 보호 (`lane_guard.py`) | Edit, Write, NotebookEdit, Bash, SendMessage 직전 | 허브 폴더는 허브, 허브 `lanes.json`(0.7.1 까지는 `agents.json`)의 `lanes` 에 적은 경로는 그 레인의 것입니다. `lanes.json` 이 읽히지 않거나, 그것이 없을 때 `lanes` 가 든 `agents.json` 이 읽히지 않으면 고칠 때까지 이 PC 의 모든 세션에서 허브 폴더 밖 쓰기를 막습니다. `lanes` 가 없는 `agents.json` 이 깨지면 예전처럼 허브 폴더만 지킵니다. 세션은 연 폴더로 레인이 정해지고(`<저장소>/.claude/worktrees/` 아래 worktree 는 그 저장소 레인) 자기 레인에만 씁니다. 다른 곳에 쓰려 하면 막고 허브에 요청하라고 알립니다. Windows 경로는 대소문자와 역슬래시, `/c/` 꼴을 같은 경로로 봅니다. Bash 는 리다이렉트(`>`, `>>`), `tee`, `sed -i`, `cp`, `mv`, `rm`, `touch`, `mkdir`, `ln`, `dd of=`, `patch`, `find -delete`, 쓰는 git 명령(`git -C <경로>` 나 `cd` 뒤. `status`, `log`, `diff`, `fetch` 같은 읽기는 지나감)만 최선으로 봅니다. 변수, `bash -c`, 스크립트, 다른 명령은 지나가니 실수를 막는 장치이지 보안 경계가 아닙니다. 설정 `lane_message_hub_only` 를 켜면 워커는 허브에게만 `SendMessage` 합니다 |
+
+## 세션 명령 (`lk`)
+
+플러그인이 켜져 있으면 `bin/lk` 가 Bash 도구 `PATH` 에 있습니다. 허브와 슈퍼바이저는 이 명령으로 작업 세션을 띄우고 닫습니다. 설정 예시가 `claude --bg` 와 `claude rm` 을 deny 하므로 이 길만 남습니다.
+
+| 명령 | 하는 일 |
+|---|---|
+| `lk spawn --name task-T<YYYYMMDD>-<NN>-<주제> --cwd <저장소> [--effort high] [--verify "<명령>"]... [-- <claude 인자>]` | 다른 꼴의 이름을 거부하고, `claude agents --json` 에 이름이 `task-` 인 세션이 `LANEKEEPER_MAX_TASKS`(기본 8)개 떠 있으면 거부합니다. `claude --bg` 를 돌리고 그 출력을 그대로 보입니다. `--verify` 는 `<허브>/.lanekeeper/tasks/<T>.json` 과 저장소의 `git rev-parse --git-common-dir` 아래에 남깁니다 |
+| `lk close <이름 또는 id>` | 세션 폴더에 커밋하지 않은 변경이 없고(다른 세션의 `.claude/worktrees` 는 뺌) 브랜치가 원격에 있거나 main 에 병합됐을 때만 닫습니다. git 이 없거나 실패해도 거부합니다. `claude stop`, `<허브>/.lanekeeper/closed.jsonl` 에 한 줄(T 번호, 캐시 읽기를 뗀 토큰, 소요 시간, 재지시 수, verify 기록), `claude rm` 순입니다 |
+
+`lk` 는 허브 폴더를 `--hub`, `LANEKEEPER_HUB_DIR`, 지금 폴더와 그 위 폴더 순으로 찾습니다.
 
 ## 스킬
 
@@ -270,10 +282,11 @@ $env:HUB_DIR = "C:\Users\<나>\hub"; $env:PORT = "4990"; py -3 C:\Users\<나>\la
 dashboard/        server.py, index.html, app.css, js/, test_server.py, vendor/
 docs/             README 그림(images/en, images/ko)과 그림 원본(diagrams/en, diagrams/ko)
 examples/         hub.settings.json, supervisor.settings.json, user.settings.json
+bin/              lk
 hooks/            hooks.json, open_dashboard.py, lane_guard.py, hubpath.py
-scripts/          setup_hub.py, update_hub.py, lane_deny.py
+scripts/          lk.py, setup_hub.py, update_hub.py, lane_deny.py
 skills/           setup/, update/
-templates/hub/    CLAUDE.md, COORDINATION.md, STATUS.md, agents.json, decisions.json, dev-occupancy.json
+templates/hub/    CLAUDE.md, COORDINATION.md, STATUS.md, agents.json, lanes.json, decisions.json, dev-occupancy.json
 tests/            훅과 설치, 업데이트 스크립트 시험
 ```
 

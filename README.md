@@ -20,9 +20,10 @@ The dashboard is in Korean, so its screenshots have Korean labels.
 
 | Part | Where | What it does |
 |---|---|---|
-| Hub rule templates | `templates/hub/` | The hub role and when to use which skill (`CLAUDE.md`), agreements between sessions and the report format (`COORDINATION.md`), a status board (`STATUS.md`) and three empty data files |
+| Hub rule templates | `templates/hub/` | The hub role and when to use which skill (`CLAUDE.md`), agreements between sessions and the report format (`COORDINATION.md`), a status board (`STATUS.md`) and four empty data files |
 | Dashboard | `dashboard/` | A web page that only reads. It shows running sessions, user decisions, status and messages between sessions. It uses only the Python standard library |
 | Hooks | `hooks/` | Start the dashboard when a session opens in the hub folder, and stop a session from writing to the hub folder or to another lane's paths |
+| Session command | `bin/lk` | `lk spawn` and `lk close`: start a task session under the naming rule and the session limit, and close it only when its branch is safe, keeping a record of tokens and time |
 | Skills | `skills/` | `setup` to finish the install, `update` to get a new version and bring the hub folder up to date |
 | Install scripts | `scripts/` | `setup_hub.py`, called by the `setup` skill, copies the hub folder and merges settings. `update_hub.py`, called by the `update` skill, brings the hub folder up to the new templates |
 | Settings examples | `examples/` | Sample settings for the hub and supervisor sessions, such as permissions and the default model |
@@ -104,7 +105,7 @@ The skill goes through these steps.
 2. It compares the hub folder with the new templates, shows what would change, and sums up the CHANGELOG since your version. This step changes nothing.
 3. If you say yes, it backs up to `<hub folder>/.lanekeeper/backup-<time>/` and then makes the changes.
    - Rule documents (`CLAUDE.md`, `COORDINATION.md`) and settings (`.claude/settings.json`, `supervisor.settings.json`): your lines stay and only what changed in the templates goes in. Where you and the template changed the same place, the file is left alone and the skill suggests what to add. For settings JSON it adds only new top level keys and only shows nested changes such as new permission lines.
-   - Status board, roster, decisions and dev occupancy (`STATUS.md`, `agents.json`, `decisions.json`, `dev-occupancy.json`): created only when missing, never changed.
+   - Status board, roster, lanes, decisions and dev occupancy (`STATUS.md`, `agents.json`, `lanes.json`, `decisions.json`, `dev-occupancy.json`): created only when missing, never changed. A hub without `lanes.json` gets one made from the `lanes` in its `agents.json` (`migrate`).
    - User settings (`~/.claude/settings.json`): missing keys are added, as `/lanekeeper:setup` does.
 4. It tells you how to undo: `update_hub.py <hub folder> --restore <backup folder>` puts the hub folder back as it was.
 
@@ -198,13 +199,13 @@ After copying, fill them in for your project. A plugin cannot set permissions or
 1. `.claude/settings.json`: model and permissions of the hub session. Put the repositories the hub must not edit directly into the `<레인 저장소>` (lane repository) spot under `deny`, and their parent folders into `additionalDirectories`.
 2. `supervisor.settings.json`: the file the hub attaches with `--settings` when it starts a supervisor session. Write what the supervisor is allowed to do as sentences in `autoMode.allow`.
 3. Merge the keys of `examples/user.settings.json` into your user settings (`~/.claude/settings.json`, on Windows `%USERPROFILE%\.claude\settings.json`) by hand. `crossSessionInbound: "accept"` lets messages between sessions arrive without waiting for approval.
-4. Put the hub folder path into `resident.hub.cwd` in `agents.json`, and match the name with `/rename hub` inside the hub session. The dashboard treats the session whose `lane` is `HUB` in this file as the hub. Under `lanes`, list the paths each lane owns, for example `"WEB": ["~/projects/web"]`. The lane write guard hook reads them. `python3 ~/lanekeeper/scripts/lane_deny.py ~/hub` prints matching `deny` lines for step 1.
+4. Put the hub folder path into `resident.hub.cwd` in `agents.json`, and match the name with `/rename hub` inside the hub session. The dashboard treats the session whose `lane` is `HUB` in this file as the hub. In `lanes.json`, list the paths each lane owns under `lanes`, for example `"WEB": ["~/projects/web"]`. The lane write guard hook and the dashboard read it. If `lanes.json` does not parse, the hook blocks every write outside the hub folder until it is fixed. Task sessions are not listed anywhere: the dashboard reads them from `claude agents --json` and their `task-T<YYYYMMDD>-<NN>-<topic>` names. `python3 ~/lanekeeper/scripts/lane_deny.py ~/hub` prints matching `deny` lines for step 1.
 5. Fill in lanes, repositories and interfaces at the `<...>` spots in `CLAUDE.md` and `COORDINATION.md`.
-6. Decide two things in `CLAUDE.md`. Change the cap on task sessions running at once (8 by default) under "세션 다루기" (handling sessions) to fit your PC and plan. Merge delegation under "하지 않는 것" (what the hub does not do) is optional: delete that line if you do not use it, or write below it whether you allow it and which repositories are exceptions.
+6. Decide two things. Change the cap on task sessions running at once (8 by default) to fit your PC and plan: it is `env.LANEKEEPER_MAX_TASKS` in `.claude/settings.json` and `supervisor.settings.json`, and `lk spawn` enforces it. Also put the hub folder into `env.LANEKEEPER_HUB_DIR` in `supervisor.settings.json`. In `CLAUDE.md`, merge delegation under "하지 않는 것" (what the hub does not do) is optional: delete that line if you do not use it, or write below it whether you allow it and which repositories are exceptions.
 
 ## Dashboard
 
-Every few seconds it reads `agents.json`, `decisions.json`, `STATUS.md` and `dev-occupancy.json` in the hub folder, plus the session records under `~/.claude`, and shows them. It only reads. It does not send input to sessions or stop them.
+Every few seconds it reads `agents.json`, `lanes.json`, `decisions.json`, `STATUS.md` and `dev-occupancy.json` in the hub folder, plus the session records under `~/.claude`, and shows them. It only reads. It does not send input to sessions or stop them.
 
 <img alt="Dashboard office scene: the hub sends an assignment, an orange sheet flies from the hub's seat to a session's desk, and a working session types at its lit screen while a resting one sits in the lounge" src="docs/images/demo.gif" width="800">
 
@@ -217,7 +218,7 @@ The sessions and data on screen are samples for illustration.
 
 | Tab | What it shows |
 |---|---|
-| 에이전트 (Agents) | A flow chart with the hub in the middle, or a card list; click a session for its conversation and the `claude logs` screen. The `3D 오피스` (3D office) button turns on an optional isometric office above it and only then loads three.js. Each session has a desk: it sits and types while it works, shows an orange `!` when it waits for you, and walks to the lounge when it rests. Assignment and report sheets fly between the hub and the desks. Drag to turn the room, click a person to open that session. Drag the line under the office, or use the arrow keys on it, to change its height; pull it all the way up to fold it away. Without WebGL the office and the line stay hidden. A session that another one started with `claude --bg` (for example one a supervisor started) sits under that session in the flow chart, and its card in the list names it. This comes from the `claude --bg` output kept in the starting session's transcript, not from a guess |
+| 에이전트 (Agents) | A flow chart with the hub in the middle, or a card list; click a session for its conversation and the `claude logs` screen. The `3D 오피스` (3D office) button turns on an optional isometric office above it and only then loads three.js. Each session has a desk: it sits and types while it works, shows an orange `!` when it waits for you, and walks to the lounge when it rests. Assignment and report sheets fly between the hub and the desks. Drag to turn the room, click a person to open that session. Drag the line under the office, or use the arrow keys on it, to change its height; pull it all the way up to fold it away. Without WebGL the office and the line stay hidden. A session that another one started with `lk spawn` or `claude --bg` (for example one a supervisor started) sits under that session in the flow chart, and its card in the list names it. This comes from the `claude --bg` output kept in the starting session's transcript, not from a guess |
 | 결정 (Decisions) | Decision items from `decisions.json` and sessions waiting for user input right now |
 | 현황 (Status) | `STATUS.md` |
 | 흐름 (Flow) | `SendMessage` between sessions as a graph and a list. The graph is tilted 3D by default (drag or arrow keys to turn it) and can be switched to flat. The prefixes `[배정]`, `[보고]` and `[알림]` tell the kinds apart |
@@ -258,7 +259,18 @@ Do not bind it to `0.0.0.0` or put it behind a public tunnel service. Anyone who
 | Hook | When | What it does |
 |---|---|---|
 | Open dashboard (`open_dashboard.py`) | Session start (SessionStart) | Acts only when the project folder is `hub_dir` or inside it. Starts the dashboard if it is not running, and opens it in an Orca tab if `orca` is on. If the running server is from another version, it says to stop it ([Updating](#updating)) |
-| Lane write guard (`lane_guard.py`) | Before Edit, Write, NotebookEdit, Bash, SendMessage | The hub folder belongs to the hub, and each path under `lanes` in the hub's `agents.json` belongs to that lane. A session may write only to its own lane, decided by the folder it was opened in (a worktree under `<repo>/.claude/worktrees/` counts as the repository). Other writes are blocked with a message to ask the hub. Windows paths with different case, backslashes or the `/c/` form count as the same path. Bash is checked on a best effort basis only: redirects (`>`, `>>`), `tee`, `sed -i`, `cp`, `mv`. Variables, scripts and other commands get through, so this catches mistakes and is not a security boundary. With `lane_message_hub_only` on, workers may `SendMessage` only to the hub |
+| Lane write guard (`lane_guard.py`) | Before Edit, Write, NotebookEdit, Bash, SendMessage | The hub folder belongs to the hub, and each path under `lanes` in the hub's `lanes.json` (up to 0.7.1, `agents.json`) belongs to that lane. If `lanes.json` does not parse, or without it an `agents.json` that holds `lanes` does not, every write outside the hub folder is blocked in every session on the PC until the file is fixed. A broken `agents.json` with no `lanes` in it keeps only the hub folder protected, as before. A session may write only to its own lane, decided by the folder it was opened in (a worktree under `<repo>/.claude/worktrees/` counts as the repository). Other writes are blocked with a message to ask the hub. Windows paths with different case, backslashes or the `/c/` form count as the same path. Bash is checked on a best effort basis only: redirects (`>`, `>>`), `tee`, `sed -i`, `cp`, `mv`, `rm`, `touch`, `mkdir`, `ln`, `dd of=`, `patch`, `find -delete`, and git commands that write (`git -C <path>`, or after `cd`; `status`, `log`, `diff`, `fetch` and other reads pass). Variables, `bash -c`, scripts and other commands get through, so this catches mistakes and is not a security boundary. With `lane_message_hub_only` on, workers may `SendMessage` only to the hub |
+
+## Session commands (`lk`)
+
+`bin/lk` is on the Bash tool's `PATH` while the plugin is enabled. The hub and supervisors start and close task sessions with it, and the example settings deny `claude --bg` and `claude rm` so this is the only way.
+
+| Command | What it does |
+|---|---|
+| `lk spawn --name task-T<YYYYMMDD>-<NN>-<topic> --cwd <repo> [--effort high] [--verify "<cmd>"]... [-- <claude args>]` | Refuses other names and refuses when `LANEKEEPER_MAX_TASKS` (default 8) sessions named `task-` are already running in `claude agents --json`. Runs `claude --bg` and keeps its output. Saves `--verify` to `<hub>/.lanekeeper/tasks/<T>.json` and the repository's `git rev-parse --git-common-dir` |
+| `lk close <name or id>` | Refuses unless the session folder has no uncommitted changes (other sessions' `.claude/worktrees` aside) and its branch is on a remote or merged into main. If git is missing or fails, it refuses too. Then `claude stop`, one line in `<hub>/.lanekeeper/closed.jsonl` (T number, tokens with cache reads apart, time, number of follow-up messages, verify records), and `claude rm` |
+
+`lk` finds the hub folder from `--hub`, `LANEKEEPER_HUB_DIR`, or the current folder and its parents.
 
 ## Skills
 
@@ -274,10 +286,11 @@ Do not bind it to `0.0.0.0` or put it behind a public tunnel service. Anyone who
 dashboard/        server.py, index.html, app.css, js/, test_server.py, vendor/
 docs/             README images (images/en, images/ko) and their sources (diagrams/en, diagrams/ko)
 examples/         hub.settings.json, supervisor.settings.json, user.settings.json
+bin/              lk
 hooks/            hooks.json, open_dashboard.py, lane_guard.py, hubpath.py
-scripts/          setup_hub.py, update_hub.py, lane_deny.py
+scripts/          lk.py, setup_hub.py, update_hub.py, lane_deny.py
 skills/           setup/, update/
-templates/hub/    CLAUDE.md, COORDINATION.md, STATUS.md, agents.json, decisions.json, dev-occupancy.json
+templates/hub/    CLAUDE.md, COORDINATION.md, STATUS.md, agents.json, lanes.json, decisions.json, dev-occupancy.json
 tests/            tests for the hooks and the install and update scripts
 ```
 
