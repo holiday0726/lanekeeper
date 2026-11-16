@@ -64,7 +64,7 @@ addy-skills 플러그인이 설치돼 있을 때만 이 절을 따른다. 설치
   - `--verify` 는 완료 조건에 적은 확인 명령이다. 여러 개면 `--verify` 를 여러 번 쓴다. `lk` 가 `.lanekeeper/tasks/<T>.json` 에 적는다.
   - 명령 뒤에 지시를 붙이지 않는다. 첫 지시는 띄운 뒤 `SendMessage`(to: 세션 이름)로 배정 형식에 맞춰 보낸다.
   - 보고를 받으면 완료 조건과 검증 근거를 확인한다. 만족하면 `lk close <이름>` 으로 닫고 `STATUS.md` 에서 내린다. 부족하면 같은 세션에 다시 지시한다.
-  - `lk close` 는 세션이 옮겨 간 worktree 마다 커밋하지 않은 변경이 없고 브랜치가 원격에 있거나 main 에 병합됐을 때만 `claude stop` 과 `claude rm` 을 부른다. 세션이 일한 곳은 그 transcript 에서 찾고, 띄운 폴더는 세션이 거기서 끝났을 때만 띄울 때 있던 변경을 빼고 본다. 그 전에 T 번호, 일한 worktree 와 브랜치, 토큰, 소요 시간, 재지시 수를 `.lanekeeper/closed.jsonl` 에 한 줄 남긴다. 거부되면 그 이유(push 전, 커밋 전, transcript 없음)를 세션에 알린다.
+  - `lk close` 는 세션이 옮겨 간 worktree 마다 커밋하지 않은 변경이 없고 브랜치가 원격에 있거나 main 에 병합됐을 때만 `claude stop` 과 `claude rm` 을 부른다. 세션이 일한 곳은 그 transcript 에서 찾고, 띄운 폴더는 세션이 옮겨 가지 않았거나 그 저장소로 돌아왔을 때만 띄울 때 있던 변경을 빼고 본다. 그 전에 T 번호, 일한 worktree 와 브랜치, 토큰, 소요 시간, 재지시 수를 `.lanekeeper/closed.jsonl` 에 한 줄 남긴다. 거부되면 그 이유(push 전, 커밋 전, transcript 없음)를 세션에 알린다.
   - 사용자에게 결과를 올릴 때는 허브 요약 아래에 보고 원문 위치(파일 경로, 또는 세션 이름과 받은 시각)를 붙인다. 요약은 원문을 대신하지 않는다.
   - 세션을 닫기 전에 다른 세션이 그 세션의 임시 파일이나 브랜치에 기대고 있지 않은지 본다. `claude rm` 은 그 세션의 worktree 폴더와 그 작업 브랜치를 지운다. 다른 세션이 그 폴더의 파일이나 그 브랜치를 쓰고 있으면 닫지 않는다.
   - 동시에 도는 작업 세션 상한은 `lk spawn` 이 `claude agents --json` 으로 세어 지킨다(이름이 `task-` 인 세션만 센다). 상한은 사용자가 정하고, 허브 폴더 `.claude/settings.json` 과 `supervisor.settings.json` 의 `env.LANEKEEPER_MAX_TASKS`(없으면 8)에 둔다. 상주 세션은 세지 않고 이 규칙으로 닫지 않는다.

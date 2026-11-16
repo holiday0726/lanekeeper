@@ -19,11 +19,13 @@ spawn 기록: <허브>/.lanekeeper/tasks/<T>.json 과 <저장소 git 공통 폴�
   --verify 없이 같은 T 로 또 띄우면 앞의 verify 를 둔다. 다음 판의 lk verify 는 워커 worktree 에서
   git rev-parse --git-common-dir 로 이 파일을 찾고, 결과를 git rev-parse --git-dir 아래 lanekeeper/verify.jsonl 에 한 줄씩
   {"task", "cmd", "exit", "head", ...} 로 남긴다. 작업 트리 밖이라 "변경 없음" 검사에 걸리지 않는다.
-close: claude agents --json 의 cwd 는 띄운 폴더라, 세션이 일한 곳은 그 transcript 에서 찾는다(session_places).
+close: claude agents --json 의 cwd 는 믿을 수 없어(떠 있는 세션은 옮겨 간 worktree 일 때도 있고, 멈춘 세션은 띄운 폴더다)
+  세션이 일한 곳은 그 transcript 에서 찾는다(session_places).
   - 옮겨 간 worktree(worktree-state, relocated, EnterWorktree 결과) 하나하나: 커밋하지 않은 변경(무시되지 않은 새 파일 포함,
     <저장소>/.claude/worktrees 는 뺌)이 없고 HEAD 가 원격 추적 브랜치나 main/master 에 들어 있어야 한다. 폴더가 없어졌으면
     그 브랜치가 남아 있을 때 브랜치를 본다.
-  - 띄운 폴더: 세션이 마지막에 그 저장소에 있었을 때만 같은 검사를 한다. lk spawn 기록의 git_at_spawn 이 있으면 그때부터
+  - 띄운 폴더: worktree 로 옮겨 가지 않았거나, 나와서 띄운 저장소에서 끝났을 때만 같은 검사를 한다. transcript 의 마지막 cwd 가
+    남의 저장소나 허브 폴더면(셸이 따라간 곳) 보지 않는다. lk spawn 기록의 git_at_spawn 이 있으면 그때부터
     있던 변경 줄은 빼고, HEAD 가 그때와 같으면(세션이 커밋하지 않음) 된다. 옮겨 간 세션은 띄운 폴더의 사용자 파일을 보지 않는다.
   - transcript 를 찾지 못하면 어디서 일했는지 모르니 거부한다. git 이 없거나 실패해도 거부한다.
   그다음 claude stop, 다시 같은 검사, 기록, claude rm 순이다. claude rm 이 worktree 와 그 git 폴더를 지우니
@@ -386,7 +388,8 @@ def toplevel(p):
 def session_places(path):
     """transcript 에서 세션이 일한 곳. {'launch': 첫 cwd, 'last': 마지막 cwd, 'entered': [{'path', 'branch', 'repo'}]}.
 
-    claude agents --json 의 cwd 는 세션을 띄운 폴더에 머문다(nipa 77cf7a84 실측, 2.1.325). 옮겨 간 worktree 는 transcript 의
+    claude agents --json 의 cwd 는 믿을 수 없다(2.1.325 실측: 떠 있는 77cf7a84 는 띄운 폴더였다가 worktree 로 바뀌었고, 멈춘
+    시험 세션은 띄운 폴더로 돌아갔다). 옮겨 간 worktree 는 transcript 의
     worktree-state(worktreeSession.worktreePath, worktreeBranch, originalCwd), relocated(relocatedCwd),
     EnterWorktree 결과(toolUseResult.worktreePath)에 남는다. entered 는 이 셋에 나온 곳을 처음 나온 차례로 둔다.
     """
@@ -471,24 +474,29 @@ def session_safety(r, hub, t):
         return False, '세션 transcript 를 읽지 못해 세션이 일한 곳을 알 수 없다(%s)' % e, [], None, path
     launch, last = s['launch'] or row_cwd, s['last'] or row_cwd
     entered = [e for e in s['entered'] if not same(e['path'], launch)]
-    seen, work = [], None
+    seen, work, alive = [], None, None
     for e in entered:
         ok, why, branch, head = git_safety(e['path']) if os.path.isdir(e['path']) else gone_safety(e, launch)
         seen.append({'path': e['path'], 'branch': branch or e['branch'], 'head': head, 'git': why})
         if not ok:
             return False, 'worktree %s: %s' % (e['path'], why), seen, None, path
-        if os.path.isdir(e['path']) and last and within(last, e['path']):
-            work = seen[-1]
-    if work is None:
-        base = spawn_base(hub, launch, t, r) if same(toplevel(last), toplevel(launch)) else None
-        ok, why, branch, head = git_safety(last, base)
-        seen.append({'path': last, 'branch': branch, 'head': head, 'git': why})
+        if os.path.isdir(e['path']):
+            alive = seen[-1]
+            if last and within(last, e['path']):
+                work = seen[-1]
+    # transcript 의 cwd 는 셸을 따라 남의 저장소나 허브 폴더로도 간다(nipa 190개 중 19개가 그런 곳에서 끝남). 그런 곳은 세션이
+    # 일한 곳이 아니니 보지 않는다. 띄운 폴더는 옮겨 가지 않았거나, worktree 에서 나와 띄운 저장소에서 끝났을 때 본다
+    if not entered or work is None and last and same(toplevel(last), toplevel(launch)):
+        base = spawn_base(hub, launch, t, r)
+        ok, why, branch, head = git_safety(launch, base)
+        seen.append({'path': launch, 'branch': branch, 'head': head, 'git': why})
         if not ok:
             hint = '' if base or entered or not why.startswith('커밋하지 않은') else (
                 '. 띄운 폴더에 늘 있는 사용자 파일이면 그 저장소의 .git/info/exclude 에 적거나, 세션을 lk spawn 으로 띄워 '
                 '띄울 때 상태를 남긴다')
             return False, why + hint, seen, None, path
         work = seen[-1]
+    work = work or alive or seen[-1]
     return True, work['git'], seen, work, path
 
 

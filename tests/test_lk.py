@@ -560,6 +560,53 @@ def test_close_never_moved_without_snapshot_is_strict(hub, repo, projects, capsy
     assert '.orca' in err and 'info/exclude' in err
 
 
+def other_repo(tmp_path):
+    """사용자 파일이 늘 있는 다른 저장소 루트(nipa WF1 처럼). transcript 의 cwd 는 셸을 따라 여기로 올 수 있다."""
+    o = tmp_path / 'other'
+    subprocess.run(['git', 'init', '-q', '-b', 'main', str(o)], check=True, env=GIT_ENV)
+    (o / 'user.bak').write_text('x\n')
+    return o
+
+
+def test_close_moved_session_ending_elsewhere(hub, moved, projects, tmp_path, capsys):
+    """worktree 에서 일하고 셸이 마지막에 다른 저장소(WF1/out 같은 곳)에 있었다. 그 저장소는 보지 않는다."""
+    repo, wt, rows = moved
+    git(wt, 'push', '-q', 'origin', 'feat')
+    o = other_repo(tmp_path)
+    trail(projects, 'm-sid', o / '.', o)
+    assert close(Claude(rows), hub, NAME) == 0, capsys.readouterr()
+    r = closed(hub)[0]
+    assert r['branch'] == 'feat' and lk.same(r['workdir'], str(wt)), r
+    assert [p['branch'] for p in r['places']] == ['feat']
+
+
+def test_close_never_moved_session_ending_elsewhere(hub, repo, projects, tmp_path, capsys):
+    """옮겨 가지 않은 세션은 마지막 cwd 가 어디든 띄운 폴더를 본다. 루트에 push 안 한 커밋이 있으면 거부한다."""
+    git(repo, 'commit', '-q', '--allow-empty', '-m', 'session work in root')
+    plain = tmp_path / 'plain'
+    plain.mkdir()
+    trail(projects, 'n-sid', repo, plain)
+    c = Claude([task(NAME, id='n1234567', sessionId='n-sid', cwd=str(repo))])
+    assert close(c, hub, NAME) == 2 and '원격' in capsys.readouterr().err and not c.did('stop')
+    git(repo, 'push', '-q', 'origin', 'main')
+    assert close(c, hub, NAME) == 0, capsys.readouterr()
+    r = closed(hub)[0]
+    assert lk.same(r['workdir'], str(repo)) and r['branch'] == 'main', r
+
+
+def test_close_back_in_launch_repo_checks_both(hub, moved, projects, capsys):
+    """worktree 에 들어갔다 나와 띄운 저장소에서 끝나면 둘 다 본다."""
+    repo, wt, rows = moved
+    git(wt, 'push', '-q', 'origin', 'feat')
+    trail(projects, 'm-sid', repo, states=[None])
+    git(repo, 'commit', '-q', '--allow-empty', '-m', 'after exit, in root')
+    assert close(Claude(rows), hub, NAME) == 2 and 'main' in capsys.readouterr().err
+    git(repo, 'push', '-q', 'origin', 'main')
+    assert close(Claude(rows), hub, NAME) == 0, capsys.readouterr()
+    r = closed(hub)[0]
+    assert lk.same(r['workdir'], str(repo)) and sorted(p['branch'] for p in r['places']) == ['feat', 'main'], r
+
+
 def test_session_places_reads_tool_results(tmp_path):
     """EnterWorktree 결과(toolUseResult.worktreePath)와 relocated 만 있어도 옮겨 간 곳으로 본다."""
     p = tmp_path / 't.jsonl'
