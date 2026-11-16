@@ -27,8 +27,9 @@ def git(repo, *args):
 class Claude:
     """claude agents, --bg, stop, rm 만 흉내 낸다. calls 에 부른 인자를 남긴다."""
 
-    def __init__(self, rows=(), rm_fails=False, stop_fails=False):
+    def __init__(self, rows=(), rm_fails=False, stop_fails=False, rm_keeps=False, on_stop=None):
         self.rows, self.calls, self.rm_fails, self.stop_fails = [dict(r) for r in rows], [], rm_fails, stop_fails
+        self.rm_keeps, self.on_stop = rm_keeps, on_stop
 
     def __call__(self, args, cwd=None):
         self.calls.append((list(args), cwd))
@@ -46,11 +47,14 @@ class Claude:
             for r in self.rows:
                 if r.get('id') == args[1]:
                     r['state'] = 'done'
+            if self.on_stop:
+                self.on_stop()
             return 0, 'stopped %s\n' % args[1], ''
         if args[0] == 'rm':
             if self.rm_fails:
                 return 1, '', 'not safe: unpushed commits\n'
-            self.rows = [r for r in self.rows if r.get('id') != args[1]]
+            if not self.rm_keeps:                     # rm_keeps: 0 을 돌려주고 행을 남기는 경우
+                self.rows = [r for r in self.rows if r.get('id') != args[1]]
             return 0, 'removed %s\n' % args[1], ''
         return 1, '', 'unknown'
 
@@ -61,6 +65,29 @@ class Claude:
 def task(name, state='working', **kw):
     return dict({'name': name, 'id': kw.pop('id', name[-8:]), 'sessionId': name + '-sid', 'cwd': '/x', 'state': state,
                  'kind': 'background', 'startedAt': 1794600000000}, **kw)
+
+
+@pytest.fixture(autouse=True)
+def projects(tmp_path, monkeypatch):
+    """transcript 폴더(~/.claude/projects 대신). lk close 는 세션이 일한 곳을 여기서 찾는다."""
+    p = tmp_path / 'projects'
+    p.mkdir()
+    monkeypatch.setattr(server, 'PROJECTS', str(p))
+    return p
+
+
+def trail(projects, sid, *cwds, states=()):
+    """세션 transcript: cwd 가 차례로 바뀐 기록과 worktree-state 기록(states: worktreeSession 값들, None 은 나옴)."""
+    lines = [{'type': 'user', 'cwd': str(c), 'message': {'content': 'x'}} for c in cwds]
+    lines += [{'type': 'worktree-state', 'worktreeSession': s} for s in states]
+    d = projects / '-x'
+    d.mkdir(parents=True, exist_ok=True)
+    with open(d / (sid + '.jsonl'), 'a', encoding='utf-8') as f:
+        f.write(''.join(json.dumps(x, ensure_ascii=False) + '\n' for x in lines))
+
+
+def entered(path, branch, orig):
+    return {'originalCwd': str(orig), 'worktreePath': str(path), 'worktreeBranch': branch, 'worktreeName': 'w'}
 
 
 @pytest.fixture
@@ -277,9 +304,10 @@ def test_close_merged_into_main(hub, worker):
     assert 'main' in closed(hub)[0]['git']
 
 
-def test_close_non_git_folder(hub, tmp_path):
+def test_close_non_git_folder(hub, tmp_path, projects):
     d = tmp_path / 'plain'
     d.mkdir()
+    trail(projects, 'task-T20261114-09-p-sid', d)
     c = Claude([task('task-T20261114-09-p', id='p1234567', cwd=str(d))])
     assert close(c, hub, 'task-T20261114-09-p') == 0
     assert closed(hub)[0]['git'] == 'git 저장소 아님'
@@ -297,9 +325,10 @@ def test_close_refuses(hub, rows, key, word, capsys):
     assert word in capsys.readouterr().err and not c.did('stop') and not c.did('rm')
 
 
-def test_close_rm_failure_and_retry(hub, tmp_path, capsys):
+def test_close_rm_failure_and_retry(hub, tmp_path, capsys, projects):
     d = tmp_path / 'plain'
     d.mkdir()
+    trail(projects, 'task-T20261114-09-p-sid', d)
     rows = [task('task-T20261114-09-p', id='p1234567', cwd=str(d))]
     c = Claude(rows, rm_fails=True)
     assert close(c, hub, 'p1234567') == 1
@@ -346,10 +375,11 @@ def test_close_refuses_when_status_fails(hub, worker, monkeypatch):
     assert close(c, hub, 'task-T20261114-09-w') == 2 and not c.did('stop')
 
 
-def test_close_repo_root_with_other_worktrees(hub, worker, capsys):
+def test_close_repo_root_with_other_worktrees(hub, worker, capsys, projects):
     """저장소 루트 세션: 다른 세션의 .claude/worktrees 는 내 변경이 아니다. 루트 밖 하위 폴더 변경은 본다."""
     wt, rows = worker
     repo = wt.parents[2]
+    trail(projects, 'r-sid', repo)
     c = Claude([task('task-T20261114-09-root', id='r1234567', sessionId='r-sid', cwd=str(repo))])
     assert close(c, hub, 'task-T20261114-09-root') == 0, capsys.readouterr()
     (repo / 'sub').mkdir()
@@ -357,9 +387,10 @@ def test_close_repo_root_with_other_worktrees(hub, worker, capsys):
     assert lk.git_safety(str(repo / 'sub'))[0] is False, '하위 폴더에서 열어도 저장소 전체 변경을 본다'
 
 
-def test_spawn_needs_cwd(hub, repo):
-    with pytest.raises(SystemExit):
-        spawn(Claude(), '--hub', str(hub), '--name', 'task-T20261114-09-a')
+def test_spawn_needs_cwd(hub, repo, capsys):
+    c = Claude()
+    assert spawn(c, '--hub', str(hub), '--name', 'task-T20261114-09-a') == 2
+    assert '--cwd' in capsys.readouterr().err and not c.calls
 
 
 def test_hub_dir_placeholder_ignored(hub, monkeypatch):
@@ -367,21 +398,223 @@ def test_hub_dir_placeholder_ignored(hub, monkeypatch):
     assert lk.hub_dir('', str(hub)) == str(hub), '채우지 않은 자리표시는 없는 것으로 본다'
 
 
-def test_close_record_failure_keeps_session(hub, tmp_path, capsys):
+def test_close_record_failure_keeps_session(hub, tmp_path, capsys, projects):
     d = tmp_path / 'plain'
     d.mkdir()
+    trail(projects, 'task-T20261114-09-p-sid', d)
     (hub / '.lanekeeper').write_text('a file, so no folder', encoding='utf-8')
     c = Claude([task('task-T20261114-09-p', id='p1234567', cwd=str(d))])
     assert close(c, hub, 'p1234567') == 1
     assert '기록' in capsys.readouterr().err and not c.did('rm'), '기록을 못 남기면 지우지 않는다'
 
 
-def test_close_when_stop_fails(hub, tmp_path, capsys):
+def test_close_when_stop_fails(hub, tmp_path, capsys, projects):
     """stop 이 실패해도 그 세션이 이미 떠 있지 않으면(끝난 세션) 닫는다. 떠 있으면 지우지 않는다."""
     d = tmp_path / 'plain'
     d.mkdir()
+    trail(projects, 'task-T20261114-09-p-sid', d)
+    trail(projects, 'task-T20261114-09-q-sid', d)
     c = Claude([task('task-T20261114-09-p', id='p1234567', cwd=str(d), state='done')], stop_fails=True)
     assert close(c, hub, 'p1234567') == 0 and c.did('rm') == [['rm', 'p1234567']]
     c = Claude([task('task-T20261114-09-q', id='q1234567', cwd=str(d), state='working')], stop_fails=True)
     assert close(c, hub, 'q1234567') == 1
     assert 'stop' in capsys.readouterr().err and not c.did('rm')
+
+
+# 0.8.0 리뷰(T-20261116-01) P1: claude agents 의 cwd 는 띄운 폴더다. 세션이 EnterWorktree 로 옮겨 간 곳은 transcript 에 있다
+NAME = 'task-T20261116-06-w'
+
+
+@pytest.fixture
+def moved(repo, projects):
+    """저장소 루트(main, push 됨)에서 띄워 .claude/worktrees/w(브랜치 feat)로 옮겨 간 세션. 행의 cwd 는 루트다."""
+    wt = repo / '.claude' / 'worktrees' / 'w'
+    git(repo, 'worktree', 'add', '-q', '-b', 'feat', str(wt))
+    (wt / 'b.txt').write_text('b\n')
+    git(wt, 'add', '.')
+    git(wt, 'commit', '-qm', 'b')
+    trail(projects, 'm-sid', repo, wt, states=[entered(wt, 'feat', repo)])
+    return repo, wt, [task(NAME, id='m1234567', sessionId='m-sid', cwd=str(repo))]
+
+
+def test_close_looks_at_entered_worktree(hub, moved, capsys):
+    """리뷰 A: 루트는 깨끗하고 push 됐지만 세션 worktree 에 push 안 한 커밋이 있다. 예전에는 닫았다."""
+    repo, wt, rows = moved
+    c = Claude(rows)
+    assert close(c, hub, NAME) == 2
+    err = capsys.readouterr().err
+    assert 'feat' in err and str(wt.name) in err and not c.did('stop') and not c.did('rm') and closed(hub) == []
+    git(wt, 'push', '-q', 'origin', 'feat')
+    (wt / 'c.txt').write_text('uncommitted\n')
+    assert close(c, hub, NAME) == 2 and 'c.txt' in capsys.readouterr().err and not c.did('stop')
+
+
+def test_close_ignores_launch_root_after_move(hub, moved, capsys):
+    """리뷰 B, C: worktree 는 push 됐다. 띄운 폴더 루트에 사용자 파일이 있고 main 이 원격보다 앞서도 닫는다."""
+    repo, wt, rows = moved
+    git(wt, 'push', '-q', 'origin', 'feat')
+    gd = git(wt, 'rev-parse', '--git-dir')
+    os.makedirs(os.path.join(wt, gd, 'lanekeeper'), exist_ok=True)
+    with open(os.path.join(wt, gd, 'lanekeeper', 'verify.jsonl'), 'w', encoding='utf-8') as f:
+        f.write(json.dumps({'task': 'T-20261116-06', 'cmd': 'pytest', 'exit': 0}) + '\n')
+    (repo / '.claude').mkdir(exist_ok=True)
+    (repo / '.claude' / 'settings.local.json.bak-202611141027').write_text('{}\n')
+    git(repo, 'commit', '-q', '--allow-empty', '-m', 'local main only')
+    c = Claude(rows)
+    assert close(c, hub, NAME) == 0, capsys.readouterr()
+    [r] = closed(hub)
+    assert r['branch'] == 'feat' and r['head'] == git(wt, 'rev-parse', 'HEAD') and 'origin/feat' in r['git'], r
+    assert lk.same(r['workdir'], str(wt)) and r['cwd'] == str(repo)
+    assert [p['branch'] for p in r['places']] == ['feat']
+    assert r['verify']['runs'] == [{'task': 'T-20261116-06', 'cmd': 'pytest', 'exit': 0}], '검증 기록은 worktree git 폴더에서'
+
+
+def test_close_refuses_without_transcript(hub, repo, capsys):
+    c = Claude([task(NAME, id='n1234567', sessionId='no-such', cwd=str(repo))])
+    assert close(c, hub, NAME) == 2
+    assert 'transcript' in capsys.readouterr().err and not c.did('stop')
+
+
+def test_close_checks_every_entered_worktree(hub, moved, projects, capsys):
+    """worktree 를 둘 거쳤으면 둘 다 본다. 앞의 것에 남은 커밋이 있으면 거부한다."""
+    repo, wt, rows = moved
+    wt2 = repo / '.claude' / 'worktrees' / 'w2'
+    git(repo, 'worktree', 'add', '-q', '-b', 'feat2', str(wt2), 'main')
+    git(wt2, 'push', '-q', 'origin', 'feat2')
+    trail(projects, 'm-sid', wt2, states=[None, entered(wt2, 'feat2', repo)])
+    c = Claude(rows)
+    assert close(c, hub, NAME) == 2 and 'feat ' in capsys.readouterr().err
+    git(wt, 'push', '-q', 'origin', 'feat')
+    assert close(c, hub, NAME) == 0, capsys.readouterr()
+    r = closed(hub)[0]
+    assert r['branch'] == 'feat2' and sorted(p['branch'] for p in r['places']) == ['feat', 'feat2'], r
+
+
+def test_close_vanished_worktree_checks_branch(hub, moved, capsys):
+    """옮겨 간 worktree 폴더가 없어졌으면 그 브랜치를 본다. 브랜치도 없으면 잃을 것이 없다."""
+    repo, wt, rows = moved
+    git(repo, 'worktree', 'remove', '--force', str(wt))
+    c = Claude(rows)
+    assert close(c, hub, NAME) == 2 and 'feat' in capsys.readouterr().err, '브랜치 feat 는 push 안 됨'
+    git(repo, 'push', '-q', 'origin', 'feat')
+    assert close(c, hub, NAME) == 0, capsys.readouterr()
+
+
+def test_close_vanished_worktree_without_branch(hub, moved, capsys):
+    repo, wt, rows = moved
+    git(repo, 'worktree', 'remove', '--force', str(wt))
+    git(repo, 'branch', '-D', 'feat')
+    assert close(Claude(rows), hub, NAME) == 0, capsys.readouterr()
+
+
+def test_close_rechecks_after_stop(hub, moved, capsys):
+    repo, wt, rows = moved
+    git(wt, 'push', '-q', 'origin', 'feat')
+    c = Claude(rows, on_stop=lambda: (wt / 'late.txt').write_text('x\n'))
+    assert close(c, hub, NAME) == 2
+    assert 'late.txt' in capsys.readouterr().err and c.did('stop') and not c.did('rm')
+
+
+def test_close_reports_row_left_after_rm(hub, moved, capsys):
+    """claude rm 이 0 을 돌려줬는데 행이 남으면(worktree 를 남긴 경우) 실패로 알린다."""
+    repo, wt, rows = moved
+    git(wt, 'push', '-q', 'origin', 'feat')
+    c = Claude(rows, rm_keeps=True)
+    assert close(c, hub, NAME) == 1
+    assert '남아' in capsys.readouterr().err and len(closed(hub)) == 1
+
+
+def test_close_never_moved_uses_spawn_snapshot(hub, repo, projects, capsys):
+    """옮겨 가지 않은 세션은 띄운 폴더를 본다. lk spawn 때 이미 있던 사용자 파일과 그때의 HEAD 는 세션 것이 아니다."""
+    (repo / '.orca').mkdir()
+    (repo / '.orca' / 'x').write_text('user\n')
+    git(repo, 'commit', '-q', '--allow-empty', '-m', 'user local commit')    # main 이 원격보다 앞섬
+    c = Claude()
+    assert spawn(c, '--hub', str(hub), '--name', NAME, '--cwd', str(repo)) == 0
+    trail(projects, 'abcd1234-0000', repo)
+    assert close(c, hub, NAME) == 0, capsys.readouterr()
+    assert '띄울 때' in closed(hub)[0]['git']
+
+
+def test_close_never_moved_new_file_refused(hub, repo, projects, capsys):
+    (repo / '.orca').mkdir()
+    (repo / '.orca' / 'x').write_text('user\n')
+    c = Claude()
+    assert spawn(c, '--hub', str(hub), '--name', NAME, '--cwd', str(repo)) == 0
+    trail(projects, 'abcd1234-0000', repo)
+    (repo / 'work.py').write_text('session work\n')
+    assert close(c, hub, NAME) == 2 and 'work.py' in capsys.readouterr().err
+    (repo / 'work.py').unlink()
+    (repo / 'a.txt').write_text('changed\n')
+    git(repo, 'commit', '-qam', 'session commit')
+    assert close(c, hub, NAME) == 2 and '원격' in capsys.readouterr().err, '세션이 루트에서 한 커밋은 push 해야 닫는다'
+
+
+def test_close_never_moved_without_snapshot_is_strict(hub, repo, projects, capsys):
+    (repo / '.orca').mkdir()
+    (repo / '.orca' / 'x').write_text('user\n')
+    trail(projects, 'n-sid', repo)
+    c = Claude([task(NAME, id='n1234567', sessionId='n-sid', cwd=str(repo))])
+    assert close(c, hub, NAME) == 2
+    err = capsys.readouterr().err
+    assert '.orca' in err and 'info/exclude' in err
+
+
+def test_session_places_reads_tool_results(tmp_path):
+    """EnterWorktree 결과(toolUseResult.worktreePath)와 relocated 만 있어도 옮겨 간 곳으로 본다."""
+    p = tmp_path / 't.jsonl'
+    lines = [{'type': 'user', 'cwd': '/r'}, {'type': 'relocated', 'relocatedCwd': '/r/.claude/worktrees/a'},
+             {'type': 'user', 'toolUseResult': {'worktreePath': '/r/.claude/worktrees/b', 'worktreeBranch': 'wb'}},
+             {'type': 'user', 'cwd': '/r/.claude/worktrees/b/src'}]
+    p.write_text(''.join(json.dumps(x) + '\n' for x in lines), encoding='utf-8')
+    s = lk.session_places(str(p))
+    assert s['launch'] == '/r' and s['last'] == '/r/.claude/worktrees/b/src'
+    assert [(w['path'], w['branch']) for w in s['entered']] == [('/r/.claude/worktrees/a', ''),
+                                                               ('/r/.claude/worktrees/b', 'wb')]
+
+
+# P2: 상주 세션 띄우기
+@pytest.fixture
+def roster_hub(hub, repo):
+    (hub / 'agents.json').write_text(json.dumps({'resident': {
+        'hub': {'lane': 'hub', 'cwd': str(hub)}, 'WF1': {'lane': 'WF1', 'cwd': str(repo)}}}), encoding='utf-8')
+    return hub
+
+
+def test_spawn_resident(roster_hub, repo, capsys):
+    c = Claude([task('task-T20261116-0%d-a' % i, id='t%07d' % i) for i in range(8)])   # 작업 세션 상한이 차 있다
+    assert spawn(c, '--hub', str(roster_hub), '--resident', 'WF1', '--', '--model', 'm') == 0, capsys.readouterr()
+    [(args, cwd)] = [x for x in c.calls if x[0][0] == '--bg']
+    assert args == ['--bg', '--name', 'WF1', '--effort', 'high', '--model', 'm'] and cwd == str(repo)
+    assert '상주' in capsys.readouterr().out
+    assert not (roster_hub / '.lanekeeper' / 'tasks').exists(), '상주 세션은 T 번호 기록을 남기지 않는다'
+
+
+@pytest.mark.parametrize('args,word', [
+    (['--resident', 'designer'], 'resident'),                            # 명부에 없는 이름
+    (['--resident', 'wf1'], 'resident'),                                 # 대소문자가 다른 이름
+    (['--resident', 'hub'], '허브'),                                      # 허브는 사용자가 띄운다
+    (['--resident', 'task-T20261116-06-x'], '--name'),
+    (['--resident', 'WF1', '--verify', 'pytest'], '--verify'),
+    (['--resident', 'WF1', '--name', 'task-T20261116-06-x'], '하나'),
+    ([], '하나'),
+])
+def test_spawn_resident_refuses(roster_hub, args, word, capsys):
+    c = Claude()
+    assert spawn(c, '--hub', str(roster_hub), *args) == 2
+    assert word in capsys.readouterr().err and not [a for a, _ in c.calls if a[0] == '--bg']
+
+
+def test_spawn_resident_refuses_live_duplicate(roster_hub, capsys):
+    c = Claude([task('WF1', id='r1234567', kind='background')])
+    assert spawn(c, '--hub', str(roster_hub), '--resident', 'WF1') == 2
+    assert 'WF1' in capsys.readouterr().err and not [a for a, _ in c.calls if a[0] == '--bg']
+
+
+def test_spawn_resident_cwd_override(roster_hub, tmp_path, capsys):
+    other = tmp_path / 'other'
+    other.mkdir()
+    c = Claude()
+    assert spawn(c, '--hub', str(roster_hub), '--resident', 'WF1', '--cwd', str(other)) == 0
+    assert [cwd for a, cwd in c.calls if a[0] == '--bg'] == [str(other)]
+    assert '명부' in capsys.readouterr().err, '명부의 cwd 와 다르면 알린다'
