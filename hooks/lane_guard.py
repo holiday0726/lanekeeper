@@ -4,8 +4,9 @@
 소유 경로는 허브 폴더(플러그인 설정 hub_dir, 훅에는 CLAUDE_PLUGIN_OPTION_HUB_DIR)의 lanes.json 에서 읽는다.
   {"lanes": {"WEB": ["~/projects/web"], "API": ["~/projects/api", "~/projects/shared/api"]}}
 lanes.json 이 없으면 agents.json 의 "lanes"(0.7 까지의 자리)를 읽는다. 둘 다 없으면 레인이 없다.
-허브 폴더 자체는 늘 HUB 레인 소유다. hub_dir 가 비어 있으면 아무것도 막지 않는다.
-상대 경로는 허브 폴더 기준이다. 경로가 겹치면 가장 깊은 쪽이 주인이다.
+허브 폴더 자체는 늘 HUB 레인 소유다. hub_dir 가 비어 있으면 아무것도 막지 않는다. 레인 이름 hub 는 대소문자를 가리지 않고 HUB 다.
+상대 경로는 허브 폴더 기준이다. 경로가 겹치면 가장 깊은 쪽이 주인이고, 깊이가 같으면 와일드카드 없는 경로가 앞선다.
+경로의 * 와 ? 는 폴더 이름 한 칸 안에서 맞춘다(~/n/worktrees/w3-* 는 w3-foo 와 그 아래, * 는 / 를 넘지 않음). [ 는 글자 그대로다.
 레인 파일을 읽지 못하면(JSON 이 깨짐, 모양이 틀림) 레인을 모르니 허브 폴더 밖 쓰기를 모두 막는다. 허브는 허브 폴더를 고칠 수 있다.
 lanes.json 이 없을 때 깨진 agents.json 은 원문에 "lanes": 가 보일 때만 그렇게 하고, 안 보이면 잃을 레인이 없으니 허브 폴더만 지킨다.
 훅은 hub_dir 를 설정한 PC 의 모든 세션에서 도니, 막는 동안에는 허브와 무관한 세션도 막힌다.
@@ -19,11 +20,16 @@ lanes.json 이 없을 때 깨진 agents.json 은 원문에 "lanes": 가 보일 �
   truncate, ln, chmod, chown, dd of=, patch(-d, 대상 파일, 없으면 그 폴더), find -delete, git(-C, --work-tree, --git-dir,
   없으면 그 폴더. status, log, diff, fetch 같은 읽기는 뺀다)의 대상. cd, pushd 는 따라가고 괄호 안 cd 는 괄호 밖으로 잇지 않는다.
   rm, rmdir, mv 원본, find -delete 는 대상 아래에 다른 레인이 있어도 막는다.
+  변수($X, ${X})와 명령 치환($(...), `...`)은 풀지 않는다. 대상의 그 앞까지 고정된 폴더만 판정하고, 앞부분이 없으면
+  (대상이 $ 로 시작) 어디인지 모르니 지나간다. cd $X, cd - 뒤의 상대 경로 대상도 지나간다. 훅의 환경 변수로 풀지 않는 것은
+  같은 명령 안의 S=... 대입을 볼 수 없어서다.
   ponytail: 변수, 명령 치환, 스크립트 안의 쓰기, bash -c, python -c, PowerShell 은 보지 못하고 우회도 쉽다.
   실수를 막는 장치이고 보안 경계가 아니다. 경계가 필요하면 permissions.deny 를 같이 쓴다(scripts/lane_deny.py).
-- 설정 lane_message_hub_only 를 켜면 허브가 아닌 세션의 SendMessage 는 허브(agents.json 에서 lane 이 HUB 인 이름)와
-  main 에게만 간다. uds: 주소는 누구인지 알 수 없어 그대로 둔다(허브 메시지에 답할 때 쓰는 주소다).
+- 설정 lane_message_hub_only 를 켜면 허브가 아닌 세션의 SendMessage 는 허브(agents.json 에서 lane 이 HUB 인 이름, 대소문자
+  무시)와 main 에게만 간다. 받는 이름도 대소문자를 가리지 않는다. uds: 주소는 누구인지 알 수 없어 그대로 둔다(허브 메시지에
+  답할 때 쓰는 주소다).
 """
+import fnmatch
 import json
 import os
 import posixpath
@@ -45,6 +51,8 @@ WRAPPER_ARGS = {'sudo': ('-u', '-g', '-C', '-D', '-h', '-p', '-r', '-t', '-U'), 
 SEP_CHARS = set(';&|()\n')
 # 히어독 본문은 명령이 아니다. 여는 줄의 나머지는 두고 본문과 끝 줄만 걷어낸다
 HEREDOC = re.compile(r"<<-?[ \t]*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1([^\n]*)\n(?:.*?\n)?[ \t]*\2[ \t]*(?=\n|$)", re.S)
+WILD = re.compile(r'[*?]')     # lanes.json 경로의 와일드카드
+UNKNOWN = re.compile(r'[$`]')   # 셸이 풀어야 아는 부분(변수, 명령 치환)
 
 
 def read_json(path):
@@ -106,26 +114,53 @@ def read_lanes(hub):
     return (None, path, why) if why else (d.get('lanes') or {}, path, '')
 
 
+def lane_name(lane):
+    """레인 이름. hub 는 대소문자를 가리지 않고 HUB 로 맞춘다(nipa agents.json 은 "lane": "hub")."""
+    lane = str(lane or '')
+    return HUB if lane.upper() == HUB else lane
+
+
 def lane_roots(hub, lanes, nt=NT):
-    """[(정규화된 경로, 레인)], 깊은 경로가 앞. 허브 폴더는 HUB."""
+    """[(정규화된 경로, 레인)]. 깊은 경로가 앞이고, 깊이가 같으면 와일드카드 없는 경로가 앞. 허브 폴더는 HUB."""
     out = [(norm(hub, nt), HUB)]
     for lane, paths in (lanes.items() if isinstance(lanes, dict) else ()):
         for p in ([paths] if isinstance(paths, str) else paths if isinstance(paths, list) else []):
             if isinstance(p, str) and p.strip():
-                out.append((norm(p, nt, hub), str(lane)))
-    return sorted(out, key=lambda x: -len(x[0].rstrip('/')))
+                out.append((norm(p, nt, hub), lane_name(lane)))
+    return sorted(out, key=lambda x: (-x[0].rstrip('/').count('/'), bool(WILD.search(x[0])), -len(x[0])))
+
+
+def parts_match(parts, pat):
+    """폴더 이름마다 fnmatch. [ 는 글자 그대로 본다."""
+    return all(fnmatch.fnmatchcase(a, b.replace('[', '[[]')) for a, b in zip(parts, pat))
+
+
+def under_root(path, root):
+    """path 가 root 이거나 그 아래인지. root 에 * 나 ? 가 있으면 폴더 이름 한 칸씩 맞춘다."""
+    if not WILD.search(root):
+        return inside(path, root)
+    pat, parts = root.rstrip('/').split('/'), path.split('/')
+    return len(parts) >= len(pat) and parts_match(parts, pat)
+
+
+def holds(path, root):
+    """path 를 지우면 root 도 지워지는지(root 가 path 이거나 그 아래일 수 있는지)."""
+    if not WILD.search(root):
+        return inside(root, path)
+    pat, parts = root.rstrip('/').split('/'), path.rstrip('/').split('/')
+    return len(parts) <= len(pat) and parts_match(parts, pat)
 
 
 def owner(path, roots):
     for root, lane in roots:
-        if inside(path, root):
+        if under_root(path, root):
             return lane
     return None
 
 
 def hub_names(roster):
     return {n for g in ('resident', 'task') for n, v in (roster.get(g) or {}).items()
-            if isinstance(v, dict) and v.get('lane') == HUB}
+            if isinstance(v, dict) and lane_name(v.get('lane')) == HUB}
 
 
 def nonopts(args):
@@ -166,7 +201,18 @@ def is_abs(p):
 
 
 def join(base, p):
-    return p if not base or is_abs(p) else posixpath.join(base, p)
+    """base 기준 p. p 가 $ 나 ` 로 시작하면 절대 경로일 수도 있으니 base 를 붙이지 않는다(어디인지 모름)."""
+    return p if not base or is_abs(p) or p[:1] in ('$', '`') else posixpath.join(base, p)
+
+
+def fixed_part(p):
+    """셸이 풀어야 아는 부분($, `) 앞까지 고정된 폴더. 없으면 p 그대로, 앞에 고정된 폴더가 없으면 None."""
+    m = UNKNOWN.search(p)
+    if not m:
+        return p
+    pre = p[:m.start()]
+    k = max(pre.rfind('/'), pre.rfind('\\'))
+    return None if k < 0 else pre[:k] or pre[:k + 1]
 
 
 def sed_files(args):
@@ -187,7 +233,9 @@ def sed_files(args):
 GIT_READ = {'status', 'log', 'diff', 'show', 'blame', 'annotate', 'grep', 'describe', 'shortlog', 'rev-parse', 'rev-list',
             'ls-files', 'ls-tree', 'ls-remote', 'cat-file', 'merge-base', 'name-rev', 'for-each-ref', 'show-ref',
             'show-branch', 'whatchanged', 'var', 'help', 'version', 'count-objects', 'check-ignore', 'check-attr',
-            'fetch', 'cherry', 'range-diff', 'archive', 'difftool', 'verify-commit', 'verify-tag', 'fsck', 'merge-tree'}
+            'fetch', 'cherry', 'range-diff', 'archive', 'difftool', 'verify-commit', 'verify-tag', 'fsck', 'merge-tree',
+            'diff-tree', 'diff-index', 'diff-files', 'check-ref-format', 'check-mailmap',
+            'credential'}   # credential 은 저장소가 아니라 자격 증명 저장소를 읽고 쓴다
 GIT_OPT_ARG = {'-C', '-c', '--git-dir', '--work-tree', '--namespace', '--config-env', '--super-prefix'}
 BRANCH_WRITE = {'-d', '-D', '--delete', '-m', '-M', '--move', '-c', '-C', '--copy', '-f', '--force', '-u',
                 '--set-upstream-to', '--unset-upstream', '--edit-description', '-t', '--track', '--no-track',
@@ -369,8 +417,11 @@ def bash_targets(cmd):
         args = strip_wrappers(args)
         if args:
             name, rest = posixpath.basename(args[0]), args[1:]
-            if name in ('cd', 'pushd') and len(nonopts(rest)) == 1:
-                base = join(base, nonopts(rest)[0])
+            dest = nonopts(rest)
+            if name in ('cd', 'pushd') and ('-' in rest or not dest):
+                base = '~' if name == 'cd' and not rest else '$OLDPWD'   # cd 만은 집, cd - 와 pushd 만은 모름
+            elif name in ('cd', 'pushd') and len(dest) == 1:
+                base = join(base, dest[0])
             else:
                 out += [(p, base, d) for p, d in command_targets(name, rest)]
         if t == '(':
@@ -408,16 +459,17 @@ def check(inp, hub, project='', nt=NT, roster=None, message_hub_only=False, lane
         to = str((inp.get('tool_input') or {}).get('to') or '').strip()
         names = hub_names(read_roster(hub) if roster is None else roster)
         if message_hub_only and mine != HUB and to and not to.startswith('uds:') and to != 'main' \
-                and to.split(' [')[0] not in names:
+                and to.split(' [')[0].casefold() not in {n.casefold() for n in names}:
             return '이 설정에서 워커는 허브(%s)에게만 메시지를 보낸다. 다른 세션에 전할 것은 허브에 보고해라.' % (
                 ', '.join(sorted(names)) or 'agents.json 에서 lane 이 HUB 인 세션')
         return None
     for f, base, dele in targets(inp):
         if not f or f.startswith('/dev/'):
             continue
-        if base and not is_abs(base):
-            base = posixpath.join(cwd, base)
-        path = norm(f, nt, base or cwd)
+        known = fixed_part(join(base, f))
+        if known is None:
+            continue                                  # $X/..., cd $X 뒤 상대 경로: 어디인지 모르니 판정하지 않는다
+        path = norm(known, nt, cwd)
         lane = owner(path, roots)
         if lane and lane != mine:
             if lane == HUB:
@@ -426,7 +478,8 @@ def check(inp, hub, project='', nt=NT, roster=None, message_hub_only=False, lane
         if got is None and lane != HUB:
             return ('레인 정의 %s 를 읽지 못해(%s) 허브 폴더 밖 쓰기를 모두 막는다. 허브 세션이나 사용자가 이 파일을 고치면 '
                     '풀린다. 허브 팀 세션이면 SendMessage 로 허브에 알린다. (%s)' % (where, why, f))
-        under = dele and next(((r, n) for r, n in roots if n != mine and inside(r, path)), None)
+        # 풀지 못한 부분이 있으면 고정된 앞부분 아래 어디를 지우는지 모르니 이 검사는 하지 않는다
+        under = dele and known == join(base, f) and next(((r, n) for r, n in roots if n != mine and holds(path, r)), None)
         if under:
             return '%s 아래에 레인 %s 경로(%s)가 있다. 지울 일은 SendMessage 로 허브에 요청해라.' % (f, under[1], under[0])
     return None

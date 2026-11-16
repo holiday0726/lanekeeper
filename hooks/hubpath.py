@@ -43,7 +43,7 @@ def norm(p, nt=NT, base=''):
     """비교용 경로. 상대 경로는 base 기준. Linux 는 심볼릭 링크까지 푼다(realpath)."""
     p = native(p, nt)
     if nt:
-        if base and not re.match(r'[A-Za-z]:/|/', p):
+        if base and not re.match(r'[A-Za-z]:(/|$)|/', p):   # c: 만 남은 것(/c 를 바꾼 꼴)도 드라이브다
             p = native(base, nt).rstrip('/') + '/' + p
         return posixpath.normpath(p).casefold()
     return os.path.realpath(os.path.join(native(base, nt), p) if base else p)

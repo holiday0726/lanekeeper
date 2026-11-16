@@ -398,3 +398,104 @@ def test_lane_deny(tmp_path):
     (tmp_path / 'lanes.json').write_text('{"lanes": {"C": 3}}')
     with pytest.raises(SystemExit):
         rules(str(tmp_path))
+
+
+# 0.8.0 리뷰(T-20261116-01) P3: 변수, 명령 치환 대상은 모르는 대상이다. WEB 세션(C:\p\web)의 셸이 API 레인(C:\p\api)에 있다
+API_CWD = r'C:\p\api'
+VARS = [
+    ('자기 임시 폴더(변수)', 'echo x > $CLAUDE_JOB_DIR/tmp/a.txt', False),
+    ('앞에서 정한 변수', 'S=/tmp/s; mkdir -p $S/xl && unzip -o -q a.docx -d $S/xl', False),
+    ('중괄호 변수', 'cp a "${OUT}/b"', False),
+    ('명령 치환', 'echo x > "$(pwd)/out.txt"', False),
+    ('따옴표 없는 명령 치환', 'echo x > $(pwd)/out.txt', False),
+    ('백틱', 'echo x > `pwd`/out.txt', False),
+    ('변수 폴더로 cd 뒤 상대 경로', 'cd "$WT" && git commit -am x && touch done', False),
+    ('변수 폴더로 cd 뒤 더 들어감', 'cd $WT; cd sub && echo x > f', False),
+    ('cd - 는 어디인지 모름', 'cd - && touch f', False),
+    ('변수 cd 뒤 절대 경로는 그대로 판정', 'cd $WT && echo x > /c/p/api/a.txt', True),
+    ('고정된 앞부분이 남의 레인', 'touch /c/p/api/$f', True),
+    ('고정된 앞부분이 남의 레인(상대)', 'touch sub/$f', True),
+    ('고정된 앞부분이 남의 레인(cd 뒤)', 'cd /c/p/api && sed -i s/a/b/ src/$f', True),
+    ('고정된 앞부분이 레인 밖', 'rm -rf /c/$X', False),
+    ('변수 없는 상대 경로는 그대로', 'echo x > a.txt', True),
+]
+
+
+@pytest.mark.parametrize('kind,cmd,want', VARS, ids=[k for k, _, _ in VARS])
+def test_variable_targets(kind, cmd, want):
+    assert bool(check(B(cmd, API_CWD), HUBN, r'C:\p\web', nt=True, roster=NT_ROSTER)) == want
+
+
+# P5: 저장소를 바꾸지 않는 git 하위 명령
+@pytest.mark.parametrize('cmd', [
+    "TOKEN=$(printf 'host=x\\n\\n' | git credential fill | sed -n 's/^password=//p')",
+    'git credential approve < c.txt',
+    'git diff-tree --no-commit-id -r HEAD',
+    'git diff-index --quiet HEAD --',
+    'git diff-files --name-only',
+    'git check-ref-format --branch x',
+])
+def test_git_reads_more(cmd):
+    assert not check(B(cmd, API_CWD), HUBN, r'C:\p\web', nt=True, roster=NT_ROSTER)
+
+
+# P4: lanes.json 경로의 와일드카드(*, ?)는 폴더 이름 한 칸 안에서 맞춘다. [ 는 글자 그대로다
+GLOB_LANES = ({'W3': [r'C:\n\W3', r'C:\n\worktrees\w3-*'], 'WF1': [r'C:\n\WF1'], 'ANY': [r'C:\n\x\*'],
+               'SPECIAL': [r'C:\n\x\special'], 'Q': [r'C:\n\q?'], 'OLD': [r'C:\n\[old]']}, 'lanes.json', '')
+GLOB = [
+    ('패턴 폴더 세션이 자기 레인 다른 경로', False, W(r'C:\n\W3\x.py', r'C:\n\worktrees\w3-foo'), r'C:\n\worktrees\w3-foo'),
+    ('패턴 폴더 세션이 자기 폴더', False, W(r'C:\n\worktrees\w3-foo\a.py', r'C:\n\worktrees\w3-foo'), ''),
+    ('패턴 폴더 아래 깊은 곳', False, W(r'C:\n\worktrees\w3-foo\src\a.py', r'C:\n\W3'), ''),
+    ('남의 레인 세션이 패턴 폴더', True, W(r'C:\n\worktrees\w3-foo\a.py', r'C:\n\WF1'), ''),
+    ('패턴에 안 맞는 이웃 폴더', False, W(r'C:\n\worktrees\platform-x\a.py', r'C:\n\WF1'), ''),
+    ('* 는 / 를 넘지 않는다', False, W(r'C:\n\worktrees\w3\foo\a.py', r'C:\n\WF1'), ''),
+    ('대소문자(Windows)', True, W(r'c:\N\WORKTREES\W3-Foo\a.py', r'C:\n\WF1'), ''),
+    ('패턴 레인 상위 폴더 지우기', True, B('rm -rf /c/n/worktrees', r'C:\n\WF1'), ''),
+    ('패턴 폴더 하나 지우기', True, B('rm -rf /c/n/worktrees/w3-old', r'C:\n\WF1'), ''),
+    ('같은 깊이면 글자 그대로인 경로가 앞선다', True, W(r'C:\n\x\special\f', r'C:\n\x\other'), ''),
+    ('같은 깊이 패턴 쪽', False, W(r'C:\n\x\special\f', r'C:\n\x\special'), ''),
+    ('? 는 한 글자', True, W(r'C:\n\q1\f', r'C:\n\WF1'), ''),
+    ('? 는 한 글자만', False, W(r'C:\n\q12\f', r'C:\n\WF1'), ''),
+    ('[ 는 글자 그대로', True, W(r'C:\n\[old]\f', r'C:\n\WF1'), ''),
+    ('[ 를 문자 묶음으로 보지 않음', False, W(r'C:\n\o\f', r'C:\n\WF1'), ''),
+]
+
+
+@pytest.mark.parametrize('name,want,inp,project', GLOB, ids=[c[0] for c in GLOB])
+def test_lane_glob_nt(name, want, inp, project):
+    assert bool(check(inp, HUBN, project, nt=True, roster={}, lanes=GLOB_LANES)) == want
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='POSIX 는 realpath 를 거친다')
+def test_lane_glob_posix(tmp_path):
+    n = tmp_path / 'n'
+    for d in ('W3', 'WF1', 'worktrees/w3-foo', 'worktrees/platform-x'):
+        (n / d).mkdir(parents=True)
+    os.symlink(n, tmp_path / 'link')
+    lanes = ({'W3': [str(n / 'W3'), str(tmp_path / 'link' / 'worktrees' / 'w3-*')], 'WF1': [str(n / 'WF1')]},
+             'lanes.json', '')
+    hub, wt, wf1 = str(tmp_path / 'hub'), str(n / 'worktrees' / 'w3-foo'), str(n / 'WF1')
+    assert not check(W(str(n / 'W3' / 'x.py'), wt), hub, wt, nt=False, roster={}, lanes=lanes)
+    assert check(W(wt + '/a.py', wf1), hub, '', nt=False, roster={}, lanes=lanes)
+    assert not check(W(str(n / 'worktrees' / 'platform-x' / 'a'), wf1), hub, '', nt=False, roster={}, lanes=lanes)
+    assert check(B('rm -rf %s' % (n / 'worktrees'), wf1), hub, '', nt=False, roster={}, lanes=lanes)
+
+
+def test_lane_deny_glob():
+    sys.path.insert(0, os.path.join(HOOKS, '..', 'scripts'))
+    from lane_deny import rule
+    assert rule('~/n/worktrees/w3-*', '/h') == 'Edit(~/n/worktrees/w3-*/**)'
+    assert rule('C:\\n\\worktrees\\w3-*', '/h') == 'Edit(//c/n/worktrees/w3-*/**)'
+
+
+# E1: 허브 레인 이름은 대소문자를 가리지 않는다(nipa agents.json 은 "lane": "hub")
+def test_hub_lane_case_insensitive():
+    from lane_guard import hub_names, lane_roots
+    roster = {'resident': {'hub': {'lane': 'hub'}, 'boss': {'lane': 'Hub'}, 'WF1': {'lane': 'WF1'}}}
+    assert hub_names(roster) == {'hub', 'boss'}
+    on = dict(nt=True, roster=roster, message_hub_only=True)
+    assert not check(M('hub', r'C:\p\web'), HUBN, **on)
+    assert not check(M('HUB', r'C:\p\web'), HUBN, **on), '이름도 대소문자를 가리지 않는다'
+    assert not check(M('Boss [3fa9c1]', r'C:\p\web'), HUBN, **on)
+    assert check(M('WF1', r'C:\p\web'), HUBN, **on)
+    assert ('c:/p/h2', 'HUB') in lane_roots(HUBN, {'hub': [r'C:\p\h2']}, nt=True), 'lanes.json 의 hub 키도 HUB 레인'
