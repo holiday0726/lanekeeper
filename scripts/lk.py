@@ -236,7 +236,7 @@ def spawn_resident(a, extra, claude):
     live = [r for r in rows if r.get('name') == name]
     if live:
         raise Refuse('같은 이름의 세션이 이미 떠 있다: %s(id %s). 맥락을 새로 하려면 옛 세션을 claude stop 으로 멈추고, '
-                     '목록에서 지우는 claude rm 은 사용자에게 부탁한 뒤 다시 띄운다' % (
+                     '다시 띄운다. 목록에서 지우는 claude rm 은 필요하면 사용자에게 부탁한다' % (
                          name, ', '.join(str(r.get('id') or r.get('sessionId')) for r in live)))
     args = ['--bg', '--name', name, '--effort', a.effort] + extra
     code, out, err = claude(args, cwd)
@@ -330,7 +330,8 @@ def git_safety(cwd, base=None):
     before = set((base or {}).get('dirty') or [])
     dirty = [x for x in r[1].splitlines() if x.strip() and x not in before]
     if dirty:
-        return False, '커밋하지 않은 변경이 있다(%s%s). 커밋하고 push 하거나 병합한 뒤 닫는다' % (
+        return False, ('커밋하지 않은 변경이 있다(%s%s). 그 세션이 만든 변경이면 커밋하고 push 하거나 병합한 뒤 닫는다. '
+                       '세션과 무관한 사용자 파일이면 커밋하지 말고 .git/info/exclude 에 넣거나 사용자에게 확인한다') % (
             dirty[0].strip(), ' 외 %d개' % (len(dirty) - 1) if len(dirty) > 1 else ''), '', ''
     r = git_run(cwd, 'rev-parse', '--verify', '-q', 'HEAD')
     if r and r[0] == 1:

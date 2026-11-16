@@ -24,6 +24,7 @@ To bring an existing hub folder up to it, call `/lanekeeper:update` in the hub s
 
 ### Fixed
 
+- `lk close` refusal text now distinguishes the session's changes from unrelated user files, and the hub template stops the session and tells the user when files belonging to others in the start folder block closing. The resident restart message no longer requires `claude rm`, and both READMEs clarify that user files in the start folder can block closing.
 - The hub lane is matched in any case. `lane_message_hub_only` found no hub in an `agents.json` that says `"lane": "hub"` and blocked every message to it; now `hub`, `Hub` and `HUB` all mark the hub, message recipients are matched in any case, and a `lanes.json` key `hub` is the hub lane. The dashboard reads such an entry as `HUB` even when the hub session is not running.
 - Lane write guard on Windows: a bare drive such as `/c` was read as a path relative to the shell folder.
 

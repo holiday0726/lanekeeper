@@ -274,7 +274,10 @@ def test_close_refuses_dirty_tree(hub, worker, capsys):
     (wt / 'new.py').write_text('x\n')                # 커밋하지 않은 새 파일
     c = Claude(rows)
     assert close(c, hub, 'w1234567') == 2
-    assert '커밋' in capsys.readouterr().err and not c.did('stop')
+    err = capsys.readouterr().err
+    assert 'new.py' in err and '그 세션이 만든 변경이면 커밋하고 push' in err
+    assert '세션과 무관한 사용자 파일이면 커밋하지 말고 .git/info/exclude' in err and '사용자에게 확인' in err
+    assert not c.did('stop') and not c.did('rm')
 
 
 def test_close_pushed_records_then_removes(hub, worker, capsys):
@@ -543,7 +546,9 @@ def test_close_never_moved_new_file_refused(hub, repo, projects, capsys):
     assert spawn(c, '--hub', str(hub), '--name', NAME, '--cwd', str(repo)) == 0
     trail(projects, 'abcd1234-0000', repo)
     (repo / 'work.py').write_text('session work\n')
-    assert close(c, hub, NAME) == 2 and 'work.py' in capsys.readouterr().err
+    assert close(c, hub, NAME) == 2
+    err = capsys.readouterr().err
+    assert 'work.py' in err and '.git/info/exclude' in err and '사용자에게 확인' in err
     (repo / 'work.py').unlink()
     (repo / 'a.txt').write_text('changed\n')
     git(repo, 'commit', '-qam', 'session commit')
