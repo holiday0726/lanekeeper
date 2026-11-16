@@ -30,7 +30,7 @@ TOKEN = os.environ.get('LANEKEEPER_TOKEN', '')   # optional; empty means no toke
 ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(ROOT, '..', 'hooks'))   # the lane rules the write guard uses
 from hubpath import inside, norm, task_name  # noqa: E402
-from lane_guard import HUB as HUB_LANE, lane_roots, owner, read_lanes  # noqa: E402
+from lane_guard import HUB as HUB_LANE, lane_name, lane_roots, owner, read_lanes  # noqa: E402
 
 
 def plugin_version():
@@ -132,7 +132,7 @@ def roster(path=ROSTER):
         for group in ('resident', 'task'):
             for i, (name, v) in enumerate((d.get(group) or {}).items()):
                 if isinstance(v, dict):
-                    out[name] = {'group': group, 'lane': str(v.get('lane') or ''),
+                    out[name] = {'group': group, 'lane': lane_name(v.get('lane')),   # hub 는 대소문자 없이 HUB
                                  'task': str(v.get('task') or ''), 'order': i}
     except (OSError, ValueError, AttributeError, TypeError):
         return {}
@@ -164,9 +164,11 @@ def names_of(rows, path=ROSTER, hub=HUB):
 
 
 def hub_name(names):
-    """The hub's session name: lane HUB, a resident before a task session someone started inside the hub folder."""
-    hubs = [n for n, r in names.items() if r.get('lane') == HUB_LANE]
-    return next((n for n in hubs if names[n].get('group') != 'task'), hubs[0] if hubs else None)
+    """The hub's session name: lane HUB; a resident first, then another session in the hub folder, then a task session
+    someone started there."""
+    rank = {'resident': 0, 'task': 2}
+    return min((n for n, r in names.items() if r.get('lane') == HUB_LANE),
+               key=lambda n: rank.get(names[n].get('group'), 1), default=None)
 
 
 SECTIONS = ('busy', 'wait', 'done')    # 진행 중, 입력 대기, 종료 (top to bottom)

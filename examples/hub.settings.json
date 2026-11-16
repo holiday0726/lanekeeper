@@ -2,6 +2,7 @@
   "model": "claude-opus-5-5",
   "effortLevel": "high",
   "env": {
+    "LANEKEEPER_HUB_DIR": "<허브 폴더>",
     "LANEKEEPER_MAX_TASKS": "8"
   },
   "permissions": {

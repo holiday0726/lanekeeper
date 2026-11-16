@@ -125,6 +125,16 @@ def test_names_from_rows(tmp_path):
     two = {'task-T20261114-09-x': {'group': 'task', 'lane': 'HUB'}, 'hub': {'group': 'resident', 'lane': 'HUB'}}
     assert server.hub_name(two) == 'hub' and server.hub_name({'w': {'lane': 'WEB'}}) is None
     assert server.hub_name({'task-T20261114-09-x': {'group': 'task', 'lane': 'HUB'}}) == 'task-T20261114-09-x'
+    # 0.8.0 P6: 허브 폴더의 다른 세션(other)보다 상주가 먼저, 그다음 other, 마지막 task
+    three = {'stray': {'group': 'other', 'lane': 'HUB'}, 'task-T20261114-09-x': {'group': 'task', 'lane': 'HUB'},
+             'hub': {'group': 'resident', 'lane': 'HUB'}}
+    assert server.hub_name(three) == 'hub'
+    assert server.hub_name({k: three[k] for k in ('task-T20261114-09-x', 'stray')}) == 'stray'
+    # E1: 명부의 소문자 hub lane 은 허브가 떠 있지 않아도 HUB 다(nipa agents.json)
+    (hub / 'agents.json').write_text(json.dumps({'resident': {'hub': {'lane': 'hub'}, 'WF1': {'lane': 'WF1'}}}),
+                                     encoding='utf-8')
+    n = server.names_of([], str(hub / 'agents.json'), str(hub))
+    assert n['hub']['lane'] == 'HUB' and n['WF1']['lane'] == 'WF1' and server.hub_name(n) == 'hub'
     # 닫힌 세션: 목록에도 agents.json 에도 없으면 결정 탭과 흐름 탭이 이름에서 T 번호를 읽는다
     m = server.merge_decisions([{'id': 'D-1', 'title': 't', 'source': 'task-T20261101-03-old'}], [], {})
     assert m['now'][0]['who'] == {'group': 'task', 'closed': True, 'task': 'T-20261101-03'}
