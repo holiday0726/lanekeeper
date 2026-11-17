@@ -7,6 +7,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -529,7 +530,7 @@ def test_tokens():
         g.write(asst('a', 3, 1, 100, 10) + asst('a', 3, 50, 100, 10) + asst('b', 2, 20, 300, 0) + rec(type='user', message={'content': 'x'})
                 + rec(type='assistant', message={'id': 'c', 'content': []}) + '{"type":"assistant","message":{"usage"')
     k = {'input': 5, 'output': 70, 'cacheRead': 400, 'cacheWrite': 10, 'engine': 'claude'}
-    assert server.claude_tokens(tf) == dict(k, total=85, subagents=0)   # cache reads stay out of the total
+    assert server.claude_tokens(tf) == dict(k, total=85, subagents=0, workflows=0)   # cache reads stay out of the total
     assert server.claude_tokens(None) is None
     os.makedirs(os.path.join(tp, 's', 'subagents'))
     with open(os.path.join(tp, 's', 'subagents', 'agent-x.jsonl'), 'w', encoding='utf-8', newline='') as g:
@@ -537,7 +538,7 @@ def test_tokens():
     with open(os.path.join(tp, 's', 'subagents', 'agent-x.meta.json'), 'w', encoding='utf-8', newline='') as g:
         g.write('{}')   # not a transcript
     assert server.claude_tokens(tf) == {'input': 15, 'output': 76, 'cacheRead': 1400, 'cacheWrite': 17, 'engine': 'claude',
-                                        'total': 108, 'subagents': 1}
+                                          'total': 108, 'subagents': 1, 'workflows': 0}
     with open(tf, 'a', encoding='utf-8', newline='') as g:   # incremental: the partial line completes as a new message
         g.write(',"x":1}}\n' + asst('d', 1, 1, 1, 1))
     assert server.claude_tokens(tf)['total'] == 111
@@ -564,6 +565,161 @@ def test_tokens():
     for bad in ('x', '', 'nan', 'inf', '-3'):
         h, why = server.parse_hours(bad)
         assert h is None and why.startswith('hours'), (bad, why)
+
+
+def token_asst(mid, i, o, cr, cw, ts='2026-11-14T01:00:00Z'):
+    return rec(type='assistant', timestamp=ts, message={'id': mid, 'content': [], 'usage': dict(zip(server.USAGE_KEYS, (i, o, cr, cw)))})
+
+
+def token_file(root, relative, text):
+    p = root / relative
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(text, encoding='utf-8')
+    return str(p)
+
+
+def test_claude_tokens_workflows(tmp_path, monkeypatch):
+    monkeypatch.setattr(server, 'PROJECTS', str(tmp_path))
+    main = token_file(tmp_path, '-lane/sid.jsonl', token_asst('body', 1, 2, 100, 3))
+    token_file(tmp_path, '-lane/sid/subagents/agent-x.jsonl', token_asst('sub', 4, 5, 200, 6))
+    wf = '-lane/sid/subagents/workflows/build/agent-y.jsonl'
+    token_file(tmp_path, wf, token_asst('workflow', 7, 8, 300, 9) + token_asst('workflow', 7, 10, 300, 9)
+               + token_asst('body', 1, 2, 100, 3))
+    token_file(tmp_path, '-lane/sid/subagents/workflows/test/agent-z.jsonl', token_asst('test', 10, 11, 400, 12))
+    token_file(tmp_path, '-lane/sid/subagents/workflows/test/agent-z.meta.json', '{}')
+    token_file(tmp_path, '-lane/sid/other.jsonl', token_asst('ignored', 999, 999, 999, 999))
+    # Hand sum by id: body=106, sub=215, workflow=326 (last content block), test=433; sum=1080.
+    t = server.claude_tokens(main)
+    assert t == {'input': 22, 'output': 28, 'cacheRead': 1000, 'cacheWrite': 30, 'total': 80,
+                 'subagents': 1, 'workflows': 2, 'engine': 'claude'}
+    assert t['total'] + t['cacheRead'] == 1080
+    # New workflow bytes must invalidate the totals without rereading old messages or consuming partial lines.
+    with open(tmp_path / wf, 'a', encoding='utf-8') as f:
+        f.write(token_asst('next', 1, 2, 10, 3).rstrip('\n'))
+    assert server.claude_tokens(main) == t
+    with open(tmp_path / wf, 'a', encoding='utf-8') as f:
+        f.write('\n')
+    assert server.claude_tokens(main)['total'] == 86
+    assert server.claude_tokens(main)['cacheRead'] == 1010
+    # A standalone path still includes its workflows without searching unrelated project folders.
+    monkeypatch.setattr(server, 'PROJECTS', str(tmp_path / 'elsewhere'))
+    assert server.claude_tokens(main)['total'] == 86
+    assert server.claude_tokens(main)['workflows'] == 2
+
+
+def test_claude_tokens_copies_hand_sum(tmp_path, monkeypatch):
+    monkeypatch.setattr(server, 'PROJECTS', str(tmp_path))
+    start = lambda hour: rec(type='user', timestamp=f'2026-11-14T{hour:02d}:00:00Z', message={'content': 'start'})
+    shared = token_asst('inherited', 3, 5, 100, 7)
+    original = token_file(tmp_path, '-z-SUP/z-original.jsonl', start(0) + shared + token_asst('original', 2, 4, 200, 6))
+    renamed = token_file(tmp_path, '-a-HUB/z-original.jsonl', start(0) + shared)
+    token_file(tmp_path, '-b-hub/z-original.jsonl', start(0) + shared + token_asst('copy-only', 1, 2, 300, 3))
+    sub = token_asst('sub', 4, 5, 400, 6)
+    token_file(tmp_path, '-z-SUP/z-original/subagents/agent-x.jsonl', sub)
+    token_file(tmp_path, '-a-HUB/z-original/subagents/agent-x.jsonl', sub)
+    wf = token_asst('workflow', 7, 8, 500, 9)
+    token_file(tmp_path, '-z-SUP/z-original/subagents/workflows/build/agent-y.jsonl', wf)
+    token_file(tmp_path, '-b-hub/z-original/subagents/workflows/build/agent-y.jsonl', wf)
+    resume = token_file(tmp_path, '-0-resume/a-resume.jsonl', start(2) + shared + token_asst('resume', 10, 20, 600, 30))
+    token_file(tmp_path, '-0-resume/a-resume/subagents/workflows/build/agent-y.jsonl', wf)
+    # REPORT.md's hand-sum method: union ids over sid copies, then move shared ids to the earlier sid.
+    # sid         | input | output | cache_read | cache_write | four-kind sum
+    # z-original  |    17 |     24 |       1500 |          31 |          1572
+    # a-resume    |    10 |     20 |        600 |          30 |           660
+    # Ask for the resume first: neither folder order, sid order, mtime nor call order owns an id.
+    assert server.claude_tokens(resume) == {'input': 10, 'output': 20, 'cacheRead': 600, 'cacheWrite': 30,
+                                          'total': 60, 'subagents': 0, 'workflows': 1, 'engine': 'claude'}
+    expected = {'input': 17, 'output': 24, 'cacheRead': 1500, 'cacheWrite': 31, 'total': 72,
+                'subagents': 2, 'workflows': 2, 'engine': 'claude'}
+    assert server.claude_tokens(original) == server.claude_tokens(renamed) == expected
+    assert sum(server.claude_tokens(p)['total'] + server.claude_tokens(p)['cacheRead'] for p in (original, resume)) == 2232
+    # Returned results cannot mutate the shared cache.
+    server.claude_tokens(original)['input'] = 999
+    assert server.claude_tokens(original) == expected
+
+
+def test_claude_tokens_new_original_and_removed_copy(tmp_path, monkeypatch):
+    monkeypatch.setattr(server, 'PROJECTS', str(tmp_path))
+    shared = token_asst('shared', 1, 2, 100, 3)
+    resume = token_file(tmp_path, '-resume/resume.jsonl', rec(type='system', timestamp='2026-11-14T02:00:00Z') + shared)
+    assert server.claude_tokens(resume)['total'] == 6
+    original = token_file(tmp_path, '-original/original.jsonl', rec(type='system', timestamp='2026-11-14T00:00:00Z') + shared)
+    assert server.claude_tokens(resume)['total'] == 0
+    assert server.claude_tokens(original)['cacheRead'] == 100
+    os.unlink(original)
+    assert server.claude_tokens(resume)['total'] == 6
+    # Truncated transcripts drop old ids from both the incremental scanner and the totals cache.
+    token_file(tmp_path, '-resume/resume.jsonl', token_asst('new', 2, 3, 4, 5))
+    assert server.claude_tokens(resume)['total'] == 10
+    assert server.claude_tokens(resume)['cacheRead'] == 4
+
+
+def test_claude_tokens_start_fallback_and_ties(tmp_path, monkeypatch):
+    monkeypatch.setattr(server, 'PROJECTS', str(tmp_path))
+    # No body: a subagent's earliest assistant timestamp supplies the owning sid's start.
+    shared = token_asst('shared', 1, 2, 100, 3)
+    token_file(tmp_path, '-orphan/a-orphan/subagents/workflows/build/agent-x.jsonl', shared)
+    body = token_file(tmp_path, '-lane/b-body.jsonl', shared)
+    assert server.claude_tokens(body)['total'] == 0   # equal timestamps: a-orphan sorts first
+    assert server.claude_tokens(str(tmp_path / '-orphan/a-orphan.jsonl'))['total'] == 6
+    # Unknown starts sort after known ones, and sid breaks ties between unknown starts.
+    unknown = token_asst('unknown', 2, 3, 200, 4, ts='invalid')
+    a = token_file(tmp_path, '-lane/a-unknown.jsonl', unknown + token_asst('shared', 1, 2, 100, 3, ts='invalid'))
+    z = token_file(tmp_path, '-lane/z-unknown.jsonl', unknown)
+    assert server.claude_tokens(z)['total'] == 0
+    assert server.claude_tokens(a)['total'] == 9
+
+
+def test_claude_tokens_largest_copy_start(tmp_path, monkeypatch):
+    monkeypatch.setattr(server, 'PROJECTS', str(tmp_path))
+    shared = token_asst('shared', 1, 2, 100, 3)
+    token_file(tmp_path, '-short/a-sid.jsonl', rec(type='system', timestamp='2026-11-14T00:00:00Z') + shared)
+    largest = token_file(tmp_path, '-large/a-sid.jsonl', rec(type='system', timestamp='2026-11-14T02:00:00Z')
+                         + shared + token_asst('own', 4, 5, 200, 6))
+    other = token_file(tmp_path, '-other/b-sid.jsonl', rec(type='system', timestamp='2026-11-14T01:00:00Z') + shared)
+    # Same primary-body rule as the baseline: the longest copy supplies the start, not the first folder.
+    assert server.claude_tokens(largest)['total'] == 15
+    assert server.claude_tokens(other)['total'] == 6
+
+
+def test_token_refresh_does_not_block_or_duplicate_scan(tmp_path, monkeypatch):
+    monkeypatch.setattr(server, 'PROJECTS', str(tmp_path))
+    entered, release = threading.Event(), threading.Event()
+    calls, threads = [], []
+    original_thread = threading.Thread
+    totals = {'sid': {'total': 6}}
+
+    def scan(path):
+        calls.append(path)
+        entered.set()
+        assert release.wait(5)
+        return totals
+
+    def thread(**kw):
+        t = original_thread(**kw)
+        threads.append(t)
+        return t
+
+    monkeypatch.setattr(server, 'claude_token_totals', scan)
+    monkeypatch.setattr(server.threading, 'Thread', thread)
+    path = str(tmp_path / '-lane/sid.jsonl')
+    try:
+        assert server.refresh_token_totals(path) is None
+        assert entered.wait(5)
+        assert server.refresh_token_totals(path) is None
+        assert calls == [path] and len(threads) == 1
+    finally:
+        release.set()
+        for t in threads:
+            t.join(5)
+    # A refresh keeps the last completed snapshot available while new bytes are being read.
+    release.clear()
+    try:
+        assert server.refresh_token_totals(path) == totals
+        assert len(threads) == 2
+    finally:
+        release.set()
+        threads[-1].join(5)
 
 
 # todos: <tasks>/<sid>/<id>.json grouped by session, old <todos>/<sid>-agent-<id>.json lists read too

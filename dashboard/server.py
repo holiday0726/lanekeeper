@@ -79,6 +79,9 @@ _lock = threading.Lock()
 _codex = {}   # rollout path -> what codex_scan() has read so far
 _claude = {}  # transcript path -> what claude_scan() has read so far
 _scan_lock = threading.Lock()
+_token_lock = threading.Lock()
+_token_cache = {}   # transcript scope -> (file signature, totals by owning session id)
+_token_refresh = {}   # PROJECTS root -> last completed totals and whether a refresh is running
 _usage = {}   # usage source path -> ((mtime_ns, size), parsed reading)
 
 
@@ -423,23 +426,113 @@ def dev_occupancy(path=DEV, now=None):
     return {'state': 'ok' if at and now - at <= DEV_STALE * 1000 else 'stale', 'updatedAt': at, 'items': out}
 
 
-def claude_tokens(path):
-    """처리 토큰 = input + cache write + output, once per API message, over the session's transcript and its
-    sub-agents' (<sid>/subagents/agent-*.jsonl beside it). Cache reads are kept apart and stay out of the total."""
+def claude_token_totals(path):
+    """Count each assistant message id once across PROJECTS, including workflow transcripts and sid copies.
+
+    The earliest-starting sid owns a shared id (sid breaks timestamp ties; unknown starts sort last).
+    As in the baseline report, the largest body copy supplies a sid's first timestamp; a sid without one
+    falls back to its earliest assistant usage timestamp. File order is body, subagent, then workflow.
+    Unchanged files reuse claude_scan's incremental state; unchanged collections reuse these totals.
+    A standalone transcript outside PROJECTS is counted with only its own subagents and workflows.
+    """
+    path = os.path.abspath(path)
+    root = os.path.abspath(PROJECTS)
+    shared = os.path.dirname(os.path.dirname(path)) == root
+    scope = root if shared else path
+    sid = os.path.basename(path)[:-len('.jsonl')]
+    if shared:
+        project = os.path.join(glob.escape(root), '*')
+        body, agents = os.path.join(project, '*.jsonl'), os.path.join(project, '*', 'subagents')
+    else:
+        body = glob.escape(path)
+        agents = os.path.join(glob.escape(os.path.dirname(path)), glob.escape(sid), 'subagents')
+    patterns = [('main', body), ('sub', os.path.join(agents, 'agent-*.jsonl')),
+                ('workflow', os.path.join(agents, 'workflows', '*', 'agent-*.jsonl'))]
+    with _token_lock:
+        files = []
+        for kind, pattern in patterns:
+            for p in sorted(glob.glob(pattern)):
+                try:
+                    st = os.stat(p)
+                except OSError:
+                    continue
+                owner = os.path.relpath(p, root).split(os.sep)[1] if shared else sid
+                if kind == 'main':
+                    owner = os.path.basename(p)[:-len('.jsonl')]
+                files.append((p, owner, kind, st.st_size, st.st_mtime_ns))
+        signature = tuple(files)
+        cached = _token_cache.get(scope)
+        if cached and cached[0] == signature:
+            return cached[1]
+        scans, primary, starts, fallback, totals = {}, {}, {}, {}, {}
+        for p, sid, kind, size, _ in files:
+            try:
+                s = scans[p] = claude_scan(p)
+            except OSError:
+                continue
+            totals.setdefault(sid, {'input': 0, 'output': 0, 'cacheRead': 0, 'cacheWrite': 0,
+                                    'total': 0, 'subagents': 0, 'workflows': 0, 'engine': 'claude'})
+            if kind == 'main' and (sid not in primary or size > primary[sid]):
+                primary[sid], starts[sid] = size, s['start']
+            if s['usageStart'] is not None:
+                fallback[sid] = min(fallback.get(sid, s['usageStart']), s['usageStart'])
+            if kind != 'main':
+                totals[sid]['subagents' if kind == 'sub' else 'workflows'] += 1
+        order = lambda sid: (starts.get(sid, fallback.get(sid)) is None,
+                             starts.get(sid, fallback.get(sid)) or 0, sid)
+        # A body with no timestamp also uses the usage fallback.
+        starts = {sid: t for sid, t in starts.items() if t is not None}
+        seen = set()
+        for p, sid, _, _, _ in sorted(files, key=lambda f: order(f[1])):
+            if p not in scans:
+                continue
+            for mid, values in scans[p]['usageById'].items():
+                if mid in seen:
+                    continue
+                seen.add(mid)
+                for key, value in zip(('input', 'output', 'cacheRead', 'cacheWrite'), values):
+                    totals[sid][key] += value
+        for t in totals.values():
+            t['total'] = t['input'] + t['output'] + t['cacheWrite']
+        _token_cache[scope] = signature, totals
+        return totals
+
+
+def claude_tokens(path, totals=None):
+    """처리 토큰 = input + cache write + output, including subagents and workflows, deduplicated by message id.
+
+    Copies across project folders are merged; ids inherited by another sid stay with the original sid.
+    Cache reads are kept apart and stay out of total. subagents/workflows count transcript files, including copies.
+    """
     if not path:
         return None
-    sid = os.path.basename(path)[:-len('.jsonl')]
-    subs = glob.glob(os.path.join(os.path.dirname(path), glob.escape(sid), 'subagents', 'agent-*.jsonl'))
-    u = [0, 0, 0, 0]
-    for p in [path] + subs:
-        try:
-            for v in claude_scan(p)['usage']:
-                u = [a + b for a, b in zip(u, v)]
-        except OSError:
-            continue
-    i, o, cr, cw = u
-    return {'total': i + cw + o, 'input': i, 'output': o, 'cacheRead': cr, 'cacheWrite': cw,
-            'subagents': len(subs), 'engine': 'claude'}
+    if totals is None:
+        totals = claude_token_totals(path)
+    return dict(totals.get(os.path.basename(path)[:-len('.jsonl')], {
+        'total': 0, 'input': 0, 'output': 0, 'cacheRead': 0, 'cacheWrite': 0,
+        'subagents': 0, 'workflows': 0, 'engine': 'claude'}))
+
+
+def refresh_token_totals(path):
+    """Keep the dashboard responsive during the first all-project scan; None means no completed reading yet.
+
+    Called under agents' _lock. CLI reporting calls claude_tokens directly and waits for current totals.
+    """
+    root = os.path.abspath(PROJECTS)
+    state = _token_refresh.setdefault(root, {'totals': None, 'busy': False})
+    if not state['busy']:
+        state['busy'] = True
+
+        def run():
+            try:
+                state['totals'] = claude_token_totals(path)
+            except Exception as e:
+                print('tokens:', e, flush=True)
+            finally:
+                state['busy'] = False
+
+        threading.Thread(target=run, daemon=True).start()
+    return state['totals']
 
 
 def agents():
@@ -450,6 +543,7 @@ def agents():
                              capture_output=True, encoding='utf-8', errors='replace', timeout=15).stdout
         rows = json.loads(out or '[]')
         ro, roots = roster(), lane_roots(HUB, read_lanes(HUB)[0])
+        token_totals = None
         for a in rows:
             a.update(classify(a, ro, roots))
             p = transcript_path(a.get('sessionId', ''), a.get('cwd'))
@@ -458,7 +552,9 @@ def agents():
             a['lastActivity'] = int(os.path.getmtime(p) * 1000) if p else None
             if a.get('id'):
                 a.update(job_state(a['id']))
-            a['tokens'] = claude_tokens(p)
+            if p and token_totals is None:
+                token_totals = refresh_token_totals(p)
+            a['tokens'] = claude_tokens(p, token_totals) if token_totals is not None else None
         try:   # who started whom; trouble here must not empty the list either
             starts = [a['startedAt'] for a in rows if isinstance(a.get('startedAt'), (int, float))]
             link_parents(rows, refresh_launches(min(starts) - 60000 if starts else 0))
@@ -792,6 +888,9 @@ def scan_record(s, d):
         if isinstance(m.get('usage'), dict) and m.get('id'):
             # every content block of one API message repeats its usage: keep one per id
             s['usage'][m['id']] = [int(m['usage'].get(k) or 0) for k in USAGE_KEYS]
+            ts = ms_or_none(d.get('timestamp'))
+            if ts is not None:
+                s['usageStart'] = min(s['usageStart'], ts) if s['usageStart'] is not None else ts
         for b in m.get('content') or []:
             if isinstance(b, dict) and b.get('type') == 'tool_use' and b.get('name') == 'Bash' \
                     and BG_CMD.search(str((b.get('input') or {}).get('command') or '')):
@@ -829,21 +928,28 @@ def claude_scan(path):
         s = _claude.get(path)
         size = os.path.getsize(path)
         if not s or size < s['pos']:
-            s = _claude[path] = {'pos': 0, 'name': '', 'sends': {}, 'recv': [], 'usage': {}, 'bg': set(), 'launched': {}}
+            s = _claude[path] = {'pos': 0, 'name': '', 'sends': {}, 'recv': [], 'usage': {}, 'bg': set(), 'launched': {},
+                                'start': None, 'usageStart': None}
         with open(path, 'rb') as f:
             f.seek(s['pos'])
             data = f.read(size - s['pos'])
         end = data.rfind(b'\n') + 1   # skip a line still being written
         for line in data[:end].splitlines():
-            if line.startswith(SCAN_SKIP) or not any(k in line for k in SCAN_KEYS):
+            skip = line.startswith(SCAN_SKIP) or not any(k in line for k in SCAN_KEYS)
+            if skip and (s['start'] is not None or b'"timestamp"' not in line):
                 continue
             try:
-                scan_record(s, json.loads(line))
+                d = json.loads(line)
+                if s['start'] is None:
+                    s['start'] = ms_or_none(d.get('timestamp'))
+                if not skip:
+                    scan_record(s, d)
             except (ValueError, AttributeError, TypeError, KeyError):
                 continue
         s['pos'] += end
         return {'name': s['name'], 'sends': [dict(x) for x in s['sends'].values()], 'recv': list(s['recv']),
-                'usage': list(s['usage'].values()), 'launched': dict(s['launched'])}
+                'usage': list(s['usage'].values()), 'usageById': dict(s['usage']), 'start': s['start'],
+                'usageStart': s['usageStart'], 'launched': dict(s['launched'])}
 
 
 def launches(since, root=PROJECTS):

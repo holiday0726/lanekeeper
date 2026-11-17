@@ -32,7 +32,8 @@ close: claude agents --json 의 cwd 는 믿을 수 없어(떠 있는 세션은 �
   기록이 먼저다. rm 이 0 을 돌려줘도 claude agents --json --all 에 행이 남으면 실패로 알린다.
   기록은 <허브>/.lanekeeper/closed.jsonl 에 세션마다 한 줄(같은 sessionId 는 다시 쓰지 않음). branch, head, git, verify.runs 는
   세션이 마지막에 일한 곳(workdir) 기준이고, places 에 본 곳마다 {path, branch, head, git} 를 둔다.
-  토큰은 대시보드 claude_tokens() 와 같은 값이다(본문과 subagents, cache_read 는 total 밖에 따로).
+  토큰은 대시보드 claude_tokens() 와 같은 값이다(본문, subagents, workflows 포함, cache_read 는 total 밖에 따로).
+  사본 폴더는 메시지 id 로 합치고, 다른 sessionId 가 물려받은 같은 id 는 먼저 시작한 원본 세션에 한 번만 센다.
   재지시(redirects)는 lk close 를 부른 세션(CLAUDE_CODE_SESSION_ID)이 그 세션에 보낸 메시지 수에서 첫 배정 하나를 뺀 값이다.
   부른 세션을 모르면(Claude 세션 밖에서 부름) 받은 메시지 전체에서 하나를 뺀다. 원래 수는 messages_in, from_caller 에 둔다.
 종료 코드: 0 됨, 2 규칙으로 거부(안전한지 모를 때 포함), 1 claude 실패나 기록 실패. 출력은 UTF-8 이다.
