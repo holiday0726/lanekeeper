@@ -11,7 +11,7 @@ Claude Code 세션 하나를 허브로 두고, 허브가 다른 세션들에 일
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/ko/architecture-dark.png">
-  <img alt="lanekeeper 구성도: 사용자가 허브 세션에 지시하고, 허브가 슈퍼바이저와 작업 세션에 배정합니다. 허브는 허브 폴더에 기록하고 대시보드가 그 폴더를 읽습니다. 플러그인 훅 두 개가 대시보드 열기와 허브 폴더, 레인 쓰기 보호를 맡습니다." src="docs/images/ko/architecture-light.png" width="800">
+  <img alt="lanekeeper 구성도: 사용자가 허브 세션에 지시하고, 허브가 슈퍼바이저와 작업 세션에 배정합니다. 여러 번 주고받을 일은 사용자가 claude attach 로 작업 세션에 직접 들어갑니다. 허브는 허브 폴더에 기록하고 대시보드가 그 폴더를 읽습니다. 플러그인 훅 두 개가 대시보드 열기와 허브 폴더, 레인 쓰기 보호를 맡습니다." src="docs/images/ko/architecture-light.png" width="800">
 </picture>
 
 ## 무엇이 들어 있나
@@ -32,7 +32,7 @@ Claude Code 세션 하나를 허브로 두고, 허브가 다른 세션들에 일
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/ko/flow-dark.png">
-  <img alt="배정에서 보고까지의 순서도: 사용자가 허브에 일을 맡기고, 허브가 세션을 등록하고 띄운 뒤 배정을 보냅니다. 작업 세션은 worktree 에서 커밋하고, 레인 쓰기 보호 훅이 다른 레인 경로 쓰기를 막습니다. 작업 세션이 보고하면 허브가 STATUS.md 에 반영하고, 대시보드가 허브 폴더를 읽어 사용자에게 보여 줍니다." src="docs/images/ko/flow-light.png" width="800">
+  <img alt="배정에서 보고까지의 순서도: 사용자가 허브에 일을 맡기고, 허브가 lk spawn 으로 작업 세션을 띄운 뒤 배정을 보냅니다. 작업 세션은 worktree 에서 커밋하고, 레인 쓰기 보호 훅이 다른 레인 경로 쓰기를 막습니다. 시안처럼 여러 번 주고받을 일은 사용자가 claude attach 로 작업 세션에 들어가 직접 이야기합니다. 작업 세션이 보고하면 허브가 lk close 로 닫고 STATUS.md 에 반영하고, 대시보드가 허브 폴더를 읽어 사용자에게 보여 줍니다." src="docs/images/ko/flow-light.png" width="800">
 </picture>
 
 ## 빠른 시작

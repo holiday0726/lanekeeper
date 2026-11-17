@@ -11,7 +11,7 @@ A plugin that makes one Claude Code session the hub. The hub splits work across 
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/en/architecture-dark.png">
-  <img alt="lanekeeper architecture: the user instructs the hub session, the hub assigns work to a supervisor and task sessions, the hub writes to the hub folder and the dashboard reads that folder. Two plugin hooks open the dashboard and keep sessions out of the hub folder and other lanes." src="docs/images/en/architecture-light.png" width="800">
+  <img alt="lanekeeper architecture: the user instructs the hub session, the hub assigns work to a supervisor and task sessions, and for work with many rounds the user goes into a task session with claude attach. The hub writes to the hub folder and the dashboard reads that folder. Two plugin hooks open the dashboard and keep sessions out of the hub folder and other lanes." src="docs/images/en/architecture-light.png" width="800">
 </picture>
 
 The dashboard is in Korean, so its screenshots have Korean labels.
@@ -34,7 +34,7 @@ The user normally talks to the hub. The hub starts a task session and sends it a
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/en/flow-dark.png">
-  <img alt="Sequence from assignment to report: the user gives the hub a job, the hub registers and starts a session and sends the assignment. The task session commits in a worktree, and the lane write guard hook blocks its writes to other lanes. When it reports, the hub updates STATUS.md and the dashboard reads the hub folder and shows it to the user." src="docs/images/en/flow-light.png" width="800">
+  <img alt="Sequence from assignment to report: the user gives the hub a job, the hub starts a task session with lk spawn and sends the assignment. The task session commits in a worktree, and the lane write guard hook blocks its writes to other lanes. For work with many rounds, such as a draft, the user goes into the task session with claude attach and talks there. When it reports, the hub closes it with lk close and updates STATUS.md and the dashboard reads the hub folder and shows it to the user." src="docs/images/en/flow-light.png" width="800">
 </picture>
 
 ## Quick start
