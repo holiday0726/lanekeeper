@@ -74,11 +74,15 @@ class Paseo:
     """paseo ls, run, inspect, stop, archive 만 흉내 낸다(0.15.1 의 --json 출력 꼴). calls 에 부른 인자를 남긴다.
 
     rows 는 보관한 세션까지 든 Paseo 저장소다. missing 은 paseo 가 없는 PC(CI), fails 는 그 하위 명령이 실패하는 경우.
+    running_after_stop: stop 뒤 inspect 몇 번까지 running 으로 남는지(True 는 계속). 0.15.1 의 stop 은 cancel 이 실패해도
+    경고만 찍고 0 이다. run_cwd: run 이 --cwd 와 다른 폴더에 띄웠다고 돌려줄 때.
     """
 
-    def __init__(self, rows=(), missing=False, fails=(), keeps_archive=False, running_after_stop=False, workspaces=()):
+    def __init__(self, rows=(), missing=False, fails=(), keeps_archive=False, running_after_stop=0, workspaces=(),
+                 run_cwd=None):
         self.rows, self.calls, self.missing, self.fails = [dict(r) for r in rows], [], missing, set(fails)
         self.keeps_archive, self.running_after_stop, self.workspaces = keeps_archive, running_after_stop, list(workspaces)
+        self.run_cwd, self.still = run_cwd, 0
 
     def __call__(self, args):
         self.calls.append(list(args))
@@ -96,8 +100,8 @@ class Paseo:
         if args[0] == 'run':
             opt = lambda k: args[args.index(k) + 1] if k in args else None  # noqa: E731
             r = {'id': 'p%07d-0000-4000-8000-000000000000' % (len(self.rows) + 1), 'name': opt('--title'),
-                 'provider': opt('--provider'), 'model': opt('--model') or 'default', 'status': 'running',
-                 'cwd': opt('--cwd'), 'archived': False}
+                 'provider': opt('--provider'), 'model': opt('--model') or '-', 'status': 'running',
+                 'cwd': self.run_cwd or opt('--cwd'), 'archived': False}
             self.rows.append(r)
             return 0, json.dumps({'agentId': r['id'], 'status': 'running', 'provider': r['provider'], 'cwd': r['cwd'],
                                   'title': r['name']}), 'Created workspace wks_1 - x\n'
@@ -106,6 +110,11 @@ class Paseo:
             return 1, '', json.dumps({'error': {'code': 'AGENT_NOT_FOUND', 'message': 'Agent not found: ' + args[1]}})
         r = hit[0]
         if args[0] == 'inspect':
+            if r['status'] == 'running' and self.still is not True:   # 첫 차례나 멈춘 run 은 still 번 뒤 끝난다
+                if self.still > 0:
+                    self.still -= 1
+                else:
+                    r['status'] = 'idle'
             return 0, json.dumps({'Id': r['id'], 'Name': r['name'], 'Provider': r['provider'], 'Model': r['model'],
                                   'Status': r['status'], 'Archived': r['archived'], 'Mode': 'full-access', 'Cwd': r['cwd'],
                                   'CreatedAt': '2026-11-26T01:00:00.000Z', 'UpdatedAt': '2026-11-26T01:30:00.000Z',
@@ -113,6 +122,7 @@ class Paseo:
                                   'Worktree': None, 'ParentAgentId': None}), ''
         if args[0] == 'stop':
             r['status'] = 'running' if self.running_after_stop else 'idle'
+            self.still = self.running_after_stop
             return 0, '', ''
         if args[0] == 'archive':
             if r['status'] == 'running' and '--force' not in args:
@@ -136,6 +146,7 @@ def paseo(monkeypatch):
     """실제 Paseo 데몬을 건드리지 않게 모든 시험에 가짜 paseo 를 끼운다. Paseo 세션이 없는 PC 와 같다."""
     p = Paseo()
     monkeypatch.setattr(lk, 'run_paseo', p)
+    monkeypatch.setattr(lk, 'sleep', lambda s: None, raising=False)   # stop 뒤 기다림을 건너뛴다
     return p
 
 
@@ -755,6 +766,7 @@ def test_spawn_codex_runs_paseo(hub, repo, paseo, capsys):
     out = capsys.readouterr().out
     assert code == 0, out
     assert not c.did('--bg'), 'claude 세션은 띄우지 않는다'
+    assert paseo.did('ls') == [['ls', '--global', '--json']], '--global 이 없으면 지금 폴더 범위만 나온다'
     [run] = paseo.did('run')
     assert run[:-1] == ['run', '--no-wait', '--json', '--title', PNAME, '--provider', 'codex', '--model', 'gpt-6.2-sol',
                         '--mode', 'full-access', '--cwd', str(repo)]
@@ -935,8 +947,8 @@ def test_close_paseo_pushed_records_then_archives(hub, repo, paseo, spawned, cap
     assert r['branch'] == 'feat' and r['head'] == git(repo, 'rev-parse', 'HEAD') and 'refs/remotes/origin/feat' in r['git']
     assert r['tokens'] is None, '모르는 토큰은 비워 둔다'
     assert r['paseo_last_usage'] == {'InputTokens': 5, 'OutputTokens': 7, 'CachedTokens': 11, 'CostUsd': 0}
-    assert r['verify']['spec'] == ['pytest'] and r['started_at'].startswith('2026-11-26')
-    assert r['last_activity_at'].startswith('2026-11-26') and r['active_s'] == 1800
+    assert r['verify']['spec'] == ['pytest'] and r['started_at'] == lk.iso(lk.stamp('2026-11-26T01:00:00.000Z'))
+    assert r['last_activity_at'] == lk.iso(lk.stamp('2026-11-26T01:30:00Z')) and r['active_s'] == 1800
 
 
 def test_close_paseo_refuses_unpushed(hub, repo, paseo, spawned, capsys):
@@ -947,7 +959,7 @@ def test_close_paseo_refuses_unpushed(hub, repo, paseo, spawned, capsys):
 
 
 def test_close_paseo_dirty_and_snapshot(hub, repo, paseo, capsys):
-    (repo / 'user.txt').write_text('사용자 파일\n')     # 띄우기 전부터 있던 사용자 파일
+    (repo / 'user.txt').write_text('사용자 파일\n', encoding='utf-8')   # 띄우기 전부터 있던 사용자 파일
     assert spawn(Claude(), '--hub', str(hub), '--cwd', str(repo), '--name', PNAME, '--engine', 'codex') == 0
     (repo / 'new.py').write_text('x\n')                # 세션이 만든 커밋하지 않은 파일
     assert close(Claude(), hub, PNAME) == 2
@@ -984,10 +996,27 @@ def test_close_paseo_reports_not_archived(hub, repo, paseo, spawned, capsys):
     assert '보관' in capsys.readouterr().err and len(closed(hub)) == 1
 
 
-def test_close_paseo_running_after_stop_forces_archive(hub, repo, paseo, spawned):
-    paseo.running_after_stop = True
-    assert close(Claude(), hub, PNAME) == 0
+def test_close_paseo_waits_for_stop(hub, repo, paseo, spawned, capsys):
+    """paseo stop 은 cancel 이 실패해도 0 이다. 다시 검사는 run 이 끝난 뒤라야 뜻이 있으니 running 이 풀릴 때까지 기다린다."""
+    paseo.running_after_stop = 3
+    assert close(Claude(), hub, PNAME) == 0, capsys.readouterr()
     assert '--force' in paseo.did('archive')[0] and paseo.rows[0]['archived']
+    assert len([a for a in paseo.did('inspect')]) >= 5, '처음 한 번, 멈춘 뒤 running 셋과 idle 하나'
+
+
+def test_close_paseo_still_running_after_stop(hub, repo, paseo, spawned, capsys):
+    paseo.running_after_stop = True
+    assert close(Claude(), hub, PNAME) == 1
+    err = capsys.readouterr().err
+    assert '돈다' in err and spawned in err
+    assert not paseo.did('archive') and closed(hub) == [], '도는 세션은 기록하지도 보관하지도 않는다'
+
+
+def test_close_paseo_stop_fails(hub, repo, paseo, spawned, capsys):
+    paseo.fails = {'stop'}
+    paseo.rows[0]['status'] = 'idle'
+    assert close(Claude(), hub, PNAME) == 0, '멈출 것이 없던(이미 쉬는) 세션이면 닫는다'
+    assert len(closed(hub)) == 1
 
 
 def test_close_paseo_record_failure_keeps_session(hub, tmp_path, paseo, capsys):
@@ -1019,3 +1048,68 @@ def test_close_paseo_non_git_folder(hub, tmp_path, paseo):
     assert close(Claude(), hub, PNAME) == 0
     [r] = closed(hub)
     assert r['git'] == 'git 저장소 아님' and r['engine'] == 'antigravity' and r['task'] == 'T-20261126-01'
+
+
+@pytest.mark.parametrize('extra', [['--workspace', 'wks_x'], ['--new-workspace', 'worktree'], ['--worktree', 'w'],
+                                   ['--cwd', '/elsewhere'], ['--workspace=wks_x'], ['--title', 'other']])
+def test_spawn_paseo_refuses_placement_args(hub, repo, paseo, extra, capsys):
+    """폴더와 workspace, 제목은 lk 가 정한다. worktree 에서 일할 세션은 worktree 를 만들어 --cwd 로 준다."""
+    assert spawn(Claude(), '--hub', str(hub), '--cwd', str(repo), '--name', PNAME, '--engine', 'codex', '--', *extra) == 2
+    assert '--cwd' in capsys.readouterr().err and not paseo.did('run')
+
+
+def test_spawn_paseo_records_where_paseo_put_it(hub, repo, tmp_path, paseo, capsys):
+    other = tmp_path / 'other'
+    other.mkdir()
+    paseo.run_cwd = str(other)
+    assert spawn(Claude(), '--hub', str(hub), '--cwd', str(repo), '--name', PNAME, '--engine', 'codex') == 0
+    assert str(other) in capsys.readouterr().err
+    [s] = json.loads((hub / '.lanekeeper' / 'tasks' / 'T-20261126-01.json').read_text(encoding='utf-8'))['sessions']
+    assert s['cwd'] == str(other) and s['git_at_spawn'] is None, '다른 폴더의 띄울 때 상태를 빼지 않는다'
+
+
+def test_spawn_limit_keeps_claude_row_count(hub, repo, paseo, capsys):
+    """claude 쪽은 예전처럼 행 수로 센다(lk 밖에서 같은 이름으로 둘 띄운 경우). Paseo 행은 claude 에 없는 이름만 더한다."""
+    dup = [task('task-T20261126-01-c', id='a1'), task('task-T20261126-01-c', id='a2')]
+    c = Claude(dup + [task('task-T20261126-%02d-c' % i) for i in range(2, 8)])
+    assert spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', 'task-T20261126-20-y') == 2, '행 8개면 거부'
+    assert '8' in capsys.readouterr().err
+    c.rows = c.rows[1:]
+    paseo.rows = [ptask('task-T20261126-01-c')]
+    assert spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', 'task-T20261126-20-y') == 0, \
+        'claude 7개와 같은 이름의 Paseo 행은 7개로 센다'
+
+
+def test_close_when_paseo_ls_fails(hub, paseo, capsys):
+    paseo.fails = {'ls'}
+    assert close(Claude(), hub, PNAME) == 2
+    err = capsys.readouterr().err
+    assert '찾지 못했다' in err and '세지' not in err
+
+
+def test_close_paseo_unknown_model(hub, tmp_path, paseo):
+    d = tmp_path / 'plain'
+    d.mkdir()
+    paseo.rows = [ptask(PNAME, cwd=str(d), model='-')]   # 0.15.1 inspect 는 모델을 모르면 "-"
+    assert close(Claude(), hub, PNAME) == 0
+    assert closed(hub)[0]['provider'] == 'codex'
+
+
+@pytest.mark.parametrize('what', ['inspect', 'cwd'])
+def test_close_paseo_without_inspect(hub, paseo, what, capsys):
+    paseo.rows = [ptask(PNAME, cwd='' if what == 'cwd' else '/x')]
+    if what == 'inspect':
+        paseo.fails = {'inspect'}
+    assert close(Claude(), hub, PNAME) == (1 if what == 'inspect' else 2)
+    assert 'inspect' in capsys.readouterr().err and not paseo.did('stop')
+
+
+def test_run_paseo_timeout_is_not_missing(monkeypatch):
+    """paseo 가 없을 때만 127 이다. 시간을 넘기거나 돌리지 못하면 실패로 본다(claude 엔진은 알리고 띄운다)."""
+    def boom(argv, **kw):
+        raise subprocess.TimeoutExpired(argv, 120)
+
+    monkeypatch.setattr(lk.shutil, 'which', lambda n: '/bin/' + n)
+    monkeypatch.setattr(lk.subprocess, 'run', boom)
+    code, _, err = REAL_RUN_PASEO(['ls'])
+    assert code not in (0, 127) and err
