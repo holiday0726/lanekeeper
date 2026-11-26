@@ -21,7 +21,7 @@ Claude Code 세션 하나를 허브로 두고, 허브가 다른 세션들에 일
 | 허브 규칙 틀 | `templates/hub/` | 허브의 역할과 스킬 쓰는 때(`CLAUDE.md`), 세션 사이 약속과 보고 형식(`COORDINATION.md`), 현황판(`STATUS.md`)과 빈 데이터 파일 넷 |
 | 대시보드 | `dashboard/` | 떠 있는 세션, 사용자 결정, 현황, 세션 사이 메시지를 보여 주는 읽기 전용 웹 화면. Python 표준 라이브러리만 씁니다 |
 | 훅 | `hooks/` | 허브 폴더에서 세션을 열면 대시보드를 띄우고, 세션이 허브 폴더나 다른 레인 경로에 쓰지 못하게 막습니다 |
-| 세션 명령 | `bin/lk` | `lk spawn` 과 `lk close`: 이름 규칙과 동시 세션 상한 안에서 작업 세션을 띄우고, 브랜치가 안전할 때만 토큰과 소요 시간 기록을 남기고 닫습니다 |
+| 세션 명령 | `bin/lk` | `lk spawn` 과 `lk close`: 이름 규칙과 동시 세션 상한 안에서 작업 세션(Claude, 또는 Paseo 로 Codex 와 Antigravity)을 띄우고, 브랜치가 안전할 때만 토큰과 소요 시간 기록을 남기고 닫습니다 |
 | 스킬 | `skills/` | 설치 마무리 `setup`, 새 판 받기와 허브 폴더 맞추기 `update` |
 | 설치 스크립트 | `scripts/` | `setup` 스킬이 부르는 `setup_hub.py`(허브 폴더 복사와 설정 합치기), `update` 스킬이 부르는 `update_hub.py`(허브 폴더를 새 틀에 맞추기) |
 | 설정 예시 | `examples/` | 허브와 슈퍼바이저 세션의 권한, 기본 모델 같은 설정 견본 |
@@ -263,11 +263,14 @@ $env:HUB_DIR = "C:\Users\<나>\hub"; $env:PORT = "4990"; py -3 C:\Users\<나>\la
 
 | 명령 | 하는 일 |
 |---|---|
-| `lk spawn --name task-T<YYYYMMDD>-<NN>-<주제> --cwd <저장소> [--effort high] [--verify "<명령>"]... [-- <claude 인자>]` | 다른 꼴의 이름을 거부하고, `claude agents --json` 에 이름이 `task-` 인 세션이 `LANEKEEPER_MAX_TASKS`(기본 8)개 떠 있으면 거부합니다. `claude --bg` 를 돌리고 그 출력을 그대로 보입니다. `--verify` 와 띄운 폴더의 그때 git 상태는 `<허브>/.lanekeeper/tasks/<T>.json` 과 저장소의 `git rev-parse --git-common-dir` 아래에 남깁니다 |
+| `lk spawn --name task-T<YYYYMMDD>-<NN>-<주제> --cwd <저장소> [--model <id>] [--effort high] [--verify "<명령>"]... [-- <claude 인자>]` | 다른 꼴의 이름을 거부하고, `claude agents --json` 과 `paseo ls --global --json` 을 합쳐 이름이 `task-` 인 세션이 `LANEKEEPER_MAX_TASKS`(기본 8)개 떠 있거나 같은 이름이 어느 한쪽에 있으면 거부합니다. `claude --bg` 를 돌리고 그 출력을 그대로 보입니다. `--verify` 와 띄운 폴더의 그때 git 상태는 `<허브>/.lanekeeper/tasks/<T>.json` 과 저장소의 `git rev-parse --git-common-dir` 아래에 남깁니다 |
+| `lk spawn --name task-T<YYYYMMDD>-<NN>-<주제> --cwd <저장소> --engine codex\|antigravity [--model <id>] [--effort <단계>] [--verify "<명령>"]... [-- <paseo run 인자>]` | Codex 나 Antigravity 세션을 Paseo CLI 로 띄웁니다: `paseo run --no-wait --json --title <이름> --provider <엔진> [--model <id>] --mode full-access --cwd <저장소>`. 그 폴더의 local Paseo workspace 가 이미 있으면 `--workspace` 로 그것을 써서, 작업마다 workspace 가 새로 쌓이지 않게 합니다. 첫 배정은 허브가 `paseo send` 로 보내니 프롬프트는 기다리라는 한 줄뿐입니다. 이름 규칙, 상한, 같은 이름 거부, T 번호 기록(`engine`, `model` 포함)은 위와 같습니다. Codex 는 `--effort` 를 `--thinking` 으로 넘깁니다. Antigravity 에는 thinking 단계가 없어 `--effort` 를 거부하니 `gemini-4-neon-xhigh` 처럼 모델 id 로 고릅니다. `paseo` 가 없으면 기본 `claude` 엔진은 그대로이고 이 두 엔진만 거부합니다. `paseo ls` 가 실패하면 Claude 세션은 Paseo 세션을 세지 못했다고 알리고 띄우며, Paseo 세션은 멈춥니다 |
 | `lk spawn --resident <이름> [--cwd <폴더>] [--effort high] [-- <claude 인자>]` | `agents.json` 의 `resident` 에 있는 상주 세션을 띄웁니다(대소문자까지 같은 이름, `task-` 이름과 허브는 안 됨). 이름 규칙과 상한을 보지 않고 T 번호 기록을 남기지 않습니다. `--cwd` 가 없으면 명부의 `cwd` 입니다. 같은 이름이 목록에 남아 있으면 거부합니다 |
-| `lk close <이름 또는 id>` | `claude agents --json` 의 cwd 는 믿을 수 없어(멈춘 세션은 띄운 폴더), 세션이 일한 곳을 transcript 에서 찾습니다. 옮겨 간 worktree 마다 커밋하지 않은 변경이 없고(다른 세션의 `.claude/worktrees` 는 뺌) 브랜치가 원격에 있거나 main 에 병합됐을 때만 닫습니다. 띄운 폴더는 세션이 옮겨 가지 않았거나 그 저장소로 돌아왔을 때만, `lk spawn` 이 띄울 때 본 상태를 빼고 봅니다. 셸이 마지막에 머문 남의 저장소는 보지 않습니다. 다만 `lk spawn` 기록이 없거나 띄운 뒤 생긴 사용자 파일은 띄운 폴더 검사에서 닫기를 막을 수 있습니다. transcript 가 없거나 git 이 없거나 실패하면 거부합니다. `claude stop`, 같은 검사 한 번 더, `<허브>/.lanekeeper/closed.jsonl` 에 한 줄(T 번호, 일한 worktree 와 브랜치와 HEAD, 캐시 읽기를 뗀 토큰, 소요 시간, 재지시 수, verify 기록), `claude rm` 순입니다. `claude rm` 뒤에도 목록에 남으면 알리고 1 로 끝납니다 |
+| `lk close <이름 또는 id>` | `claude agents --json` 의 cwd 는 믿을 수 없어(멈춘 세션은 띄운 폴더), 세션이 일한 곳을 transcript 에서 찾습니다. 옮겨 간 worktree 마다 커밋하지 않은 변경이 없고(다른 세션의 `.claude/worktrees` 는 뺌) 브랜치가 원격에 있거나 main 에 병합됐을 때만 닫습니다. 띄운 폴더는 세션이 옮겨 가지 않았거나 그 저장소로 돌아왔을 때만, `lk spawn` 이 띄울 때 본 상태를 빼고 봅니다. 셸이 마지막에 머문 남의 저장소는 보지 않습니다. 다만 `lk spawn` 기록이 없거나 띄운 뒤 생긴 사용자 파일은 띄운 폴더 검사에서 닫기를 막을 수 있습니다. transcript 가 없거나 git 이 없거나 실패하면 거부합니다. `claude stop`, 같은 검사 한 번 더, `<허브>/.lanekeeper/closed.jsonl` 에 한 줄(T 번호, 일한 worktree 와 브랜치와 HEAD, 캐시 읽기를 뗀 토큰, 소요 시간, 재지시 수, verify 기록), `claude rm` 순입니다. `claude rm` 뒤에도 목록에 남으면 알리고 1 로 끝납니다. `paseo ls --global` 에 있는 세션은 Paseo 로 닫습니다. 띄운 폴더(`paseo inspect` 의 `Cwd`)를 `lk spawn` 이 띄울 때 본 상태를 빼고 같은 git 검사로 보고, `paseo stop`, 검사 한 번 더, `closed.jsonl` 에 한 줄, `paseo archive --force` 순이며 `paseo inspect` 에 보관으로 나와야 끝납니다. 그 줄에는 `via: "paseo"`, `engine`, `provider` 가 있고 `tokens` 와 메시지 수는 `null` 이며, `paseo_last_usage` 에 Paseo 의 `LastUsage` 를 그대로 둡니다. 보관해도 폴더는 남습니다. Paseo 세션이 스스로 만든 worktree 는 `lk close` 가 보지 못하니, 그 worktree 에서 일할 세션은 worktree 를 `--cwd` 로 주어 띄웁니다. 두 목록에 같은 이름이 있으면 거부하니 id 로 닫습니다 |
 
 `lk` 는 허브 폴더를 `--hub`, `LANEKEEPER_HUB_DIR`, 지금 폴더와 그 위 폴더 순으로 찾습니다.
+
+`lk` 는 `paseo` 를 부를 때 `PASEO_AGENT_ID` 와 `PASEO_WORKSPACE_ID` 를 뺍니다. Paseo 안에서 도는 허브는 여는 셸마다 이 둘을 물려주는데, 이것이 있으면 `paseo run` 이 `--cwd` 를 버리고 허브 폴더에 허브의 자식으로 세션을 띄우고, Paseo 는 그 세션을 허브와 함께 보관합니다.
 
 ## 스킬
 

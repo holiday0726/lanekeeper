@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+import zlib
 
 import pytest
 
@@ -13,6 +14,8 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 sys.path.insert(0, os.path.join(ROOT, 'scripts'))
 import lk  # noqa: E402
 import server  # noqa: E402  lk 가 dashboard 를 경로에 넣는다
+
+REAL_RUN_PASEO = getattr(lk, 'run_paseo', None)   # 시험은 lk.run_paseo 를 가짜로 바꿔 끼운다(paseo 고정물)
 
 GIT_ENV = dict(os.environ, GIT_AUTHOR_NAME='t', GIT_AUTHOR_EMAIL='t@t', GIT_COMMITTER_NAME='t',
                GIT_COMMITTER_EMAIL='t@t', GIT_CONFIG_NOSYSTEM='1')
@@ -65,6 +68,75 @@ class Claude:
 def task(name, state='working', **kw):
     return dict({'name': name, 'id': kw.pop('id', name[-8:]), 'sessionId': name + '-sid', 'cwd': '/x', 'state': state,
                  'kind': 'background', 'startedAt': 1794600000000}, **kw)
+
+
+class Paseo:
+    """paseo ls, run, inspect, stop, archive 만 흉내 낸다(0.15.1 의 --json 출력 꼴). calls 에 부른 인자를 남긴다.
+
+    rows 는 보관한 세션까지 든 Paseo 저장소다. missing 은 paseo 가 없는 PC(CI), fails 는 그 하위 명령이 실패하는 경우.
+    """
+
+    def __init__(self, rows=(), missing=False, fails=(), keeps_archive=False, running_after_stop=False, workspaces=()):
+        self.rows, self.calls, self.missing, self.fails = [dict(r) for r in rows], [], missing, set(fails)
+        self.keeps_archive, self.running_after_stop, self.workspaces = keeps_archive, running_after_stop, list(workspaces)
+
+    def __call__(self, args):
+        self.calls.append(list(args))
+        if self.missing:
+            return 127, '', 'paseo 를 찾지 못했다'
+        if args[0] in self.fails:
+            return 1, '', json.dumps({'error': {'code': 'X', 'message': '%s boom' % args[0]}})
+        if args[:2] == ['workspace', 'ls']:
+            return 0, json.dumps(self.workspaces), ''
+        if args[0] == 'ls':
+            rows = self.rows if '--all' in args else [r for r in self.rows if not r.get('archived')]
+            return 0, json.dumps([{'id': r['id'], 'shortId': r['id'][:7], 'name': r['name'],
+                                   'provider': '%s/%s' % (r['provider'], r['model']), 'thinking': 'auto',
+                                   'status': r['status'], 'cwd': r['cwd'], 'created': '1 minutes ago'} for r in rows]), ''
+        if args[0] == 'run':
+            opt = lambda k: args[args.index(k) + 1] if k in args else None  # noqa: E731
+            r = {'id': 'p%07d-0000-4000-8000-000000000000' % (len(self.rows) + 1), 'name': opt('--title'),
+                 'provider': opt('--provider'), 'model': opt('--model') or 'default', 'status': 'running',
+                 'cwd': opt('--cwd'), 'archived': False}
+            self.rows.append(r)
+            return 0, json.dumps({'agentId': r['id'], 'status': 'running', 'provider': r['provider'], 'cwd': r['cwd'],
+                                  'title': r['name']}), 'Created workspace wks_1 - x\n'
+        hit = [r for r in self.rows if r['id'] == args[1] or r['id'][:7] == args[1]]
+        if not hit:
+            return 1, '', json.dumps({'error': {'code': 'AGENT_NOT_FOUND', 'message': 'Agent not found: ' + args[1]}})
+        r = hit[0]
+        if args[0] == 'inspect':
+            return 0, json.dumps({'Id': r['id'], 'Name': r['name'], 'Provider': r['provider'], 'Model': r['model'],
+                                  'Status': r['status'], 'Archived': r['archived'], 'Mode': 'full-access', 'Cwd': r['cwd'],
+                                  'CreatedAt': '2026-11-26T01:00:00.000Z', 'UpdatedAt': '2026-11-26T01:30:00.000Z',
+                                  'LastUsage': {'InputTokens': 5, 'OutputTokens': 7, 'CachedTokens': 11, 'CostUsd': 0},
+                                  'Worktree': None, 'ParentAgentId': None}), ''
+        if args[0] == 'stop':
+            r['status'] = 'running' if self.running_after_stop else 'idle'
+            return 0, '', ''
+        if args[0] == 'archive':
+            if r['status'] == 'running' and '--force' not in args:
+                return 1, '', json.dumps({'error': {'code': 'AGENT_RUNNING', 'message': 'currently running'}})
+            r['archived'] = not self.keeps_archive
+            return 0, json.dumps({'agentId': r['id'], 'archivedAt': '2026-11-26T02:00:00.000Z'}), ''
+        return 1, '', 'unknown'
+
+    def did(self, word):
+        return [a for a in self.calls if a and a[0] == word]
+
+
+def ptask(name, **kw):
+    """Paseo 세션 행(보관하지 않음)."""
+    return dict({'id': kw.pop('id', '%08x-0000-4000-8000-000000000000' % zlib.crc32(name.encode())), 'name': name,
+                 'provider': 'codex', 'model': 'gpt-6.2-sol', 'status': 'idle', 'cwd': '/x', 'archived': False}, **kw)
+
+
+@pytest.fixture(autouse=True)
+def paseo(monkeypatch):
+    """실제 Paseo 데몬을 건드리지 않게 모든 시험에 가짜 paseo 를 끼운다. Paseo 세션이 없는 PC 와 같다."""
+    p = Paseo()
+    monkeypatch.setattr(lk, 'run_paseo', p)
+    return p
 
 
 @pytest.fixture(autouse=True)
@@ -670,3 +742,280 @@ def test_spawn_resident_cwd_override(roster_hub, tmp_path, capsys):
     assert spawn(c, '--hub', str(roster_hub), '--resident', 'WF1', '--cwd', str(other)) == 0
     assert [cwd for a, cwd in c.calls if a[0] == '--bg'] == [str(other)]
     assert '명부' in capsys.readouterr().err, '명부의 cwd 와 다르면 알린다'
+
+
+# Paseo 엔진(codex, antigravity): lk 가 paseo run 으로 띄우고 paseo stop, archive 로 닫는다
+PNAME = 'task-T20261126-01-p'
+
+
+def test_spawn_codex_runs_paseo(hub, repo, paseo, capsys):
+    c = Claude([task('hub', kind='interactive', id=None)])
+    code = spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', PNAME, '--engine', 'codex', '--model', 'gpt-6.2-sol',
+                 '--verify', 'python3 -m pytest -q')
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert not c.did('--bg'), 'claude 세션은 띄우지 않는다'
+    [run] = paseo.did('run')
+    assert run[:-1] == ['run', '--no-wait', '--json', '--title', PNAME, '--provider', 'codex', '--model', 'gpt-6.2-sol',
+                        '--mode', 'full-access', '--cwd', str(repo)]
+    assert run[-1] == lk.WAIT_PROMPT and '허브' in run[-1], '첫 배정은 허브가 paseo send 로 보낸다. 지시문은 대기 한 줄뿐'
+    pid = paseo.rows[0]['id']
+    assert pid in out and PNAME in out
+    rec = json.loads((hub / '.lanekeeper' / 'tasks' / 'T-20261126-01.json').read_text(encoding='utf-8'))
+    assert rec['verify'] == ['python3 -m pytest -q']
+    [s] = rec['sessions']
+    assert (s['name'], s['id'], s['engine'], s['model'], s['cwd']) == (PNAME, pid, 'codex', 'gpt-6.2-sol', str(repo))
+    assert s['git_at_spawn'] == {'head': git(repo, 'rev-parse', 'HEAD'), 'dirty': []}
+    common = os.path.join(str(repo), git(repo, 'rev-parse', '--git-common-dir'))
+    assert json.loads(open(os.path.join(common, 'lanekeeper', 'tasks', 'T-20261126-01.json'), encoding='utf-8').read()) == rec
+
+
+def test_spawn_antigravity_and_effort(hub, repo, paseo, capsys):
+    c = Claude()
+    assert spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', PNAME, '--engine', 'antigravity',
+                 '--model', 'gemini-4-neon-high') == 0, capsys.readouterr()
+    [run] = paseo.did('run')
+    assert run[run.index('--provider') + 1] == 'antigravity' and run[run.index('--mode') + 1] == 'full-access'
+    assert '--thinking' not in run, '--effort 를 주지 않으면 provider 기본값'
+    paseo.rows.clear()
+    assert spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', PNAME, '--engine', 'antigravity', '--effort', 'xhigh') == 2
+    assert '모델' in capsys.readouterr().err and len(paseo.did('run')) == 1, 'antigravity 는 thinking 이 없다. 모델 id 로 고른다'
+    assert spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', PNAME, '--engine', 'codex', '--effort', 'xhigh') == 0
+    run = paseo.did('run')[-1]
+    assert run[run.index('--thinking') + 1] == 'xhigh', 'codex 는 --effort 를 thinking 으로 넘긴다'
+    assert '--model' not in run, '--model 이 없으면 provider 기본 모델'
+
+
+def wks(wid, cwd, isolation='local', background=False):
+    return {'workspaceId': wid, 'project': 'repo', 'name': 'main', 'isolation': isolation, 'cwd': str(cwd),
+            'background': background}
+
+
+def test_spawn_paseo_reuses_folder_workspace(hub, repo, tmp_path, paseo):
+    """paseo run 은 --workspace 가 없으면 부를 때마다 workspace 를 새로 만든다(0.15.1 실측). 같은 폴더의 local workspace 를 쓴다."""
+    paseo.workspaces = [wks('wks_other', tmp_path), wks('wks_wt', repo, isolation='worktree'),
+                        wks('wks_bg', repo, background=True), wks('wks_repo', repo), wks('wks_repo2', repo)]
+    assert spawn(Claude(), '--hub', str(hub), '--cwd', str(repo), '--name', PNAME, '--engine', 'codex') == 0
+    run = paseo.did('run')[0]
+    assert run[run.index('--workspace') + 1] == 'wks_repo' and run[run.index('--cwd') + 1] == str(repo)
+    paseo.rows, paseo.workspaces = [], [wks('wks_other', tmp_path)]
+    assert spawn(Claude(), '--hub', str(hub), '--cwd', str(repo), '--name', PNAME, '--engine', 'codex') == 0
+    assert '--workspace' not in paseo.did('run')[1], '없으면 paseo 가 만든다'
+    paseo.rows, paseo.fails = [], {'workspace'}
+    assert spawn(Claude(), '--hub', str(hub), '--cwd', str(repo), '--name', PNAME, '--engine', 'codex') == 0, \
+        'workspace 목록을 못 읽어도 띄운다'
+    assert '--workspace' not in paseo.did('run')[2]
+
+
+def test_spawn_paseo_passes_extra_args(hub, repo, paseo):
+    assert spawn(Claude(), '--hub', str(hub), '--cwd', str(repo), '--name', PNAME, '--engine', 'codex',
+                 '--', '--label', 'k=v') == 0
+    run = paseo.did('run')[0]
+    assert run[-3:-1] == ['--label', 'k=v'] and run[-1] == lk.WAIT_PROMPT
+
+
+def test_spawn_limit_counts_claude_and_paseo(hub, repo, paseo, capsys):
+    c = Claude([task('task-T20261126-%02d-c' % i) for i in range(1, 5)] + [task('hub', kind='interactive', id=None)])
+    paseo.rows = [ptask('task-T20261126-%02d-x' % i) for i in range(11, 14)] + [
+        ptask('hub', provider='claude'), ptask('task-T20261125-01-old', archived=True)]
+    assert spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', 'task-T20261126-20-y', '--engine', 'codex') == 0, \
+        '4 + 3 이면 띄운다(보관한 세션, task- 아닌 세션은 세지 않는다)'
+    for engine in ('codex', 'claude'):
+        assert spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', 'task-T20261126-21-z', '--engine', engine) == 2
+        err = capsys.readouterr().err
+        assert '8' in err and 'task-T20261126-01-c' in err and 'task-T20261126-20-y' in err, err
+    assert not c.did('--bg') and len(paseo.did('run')) == 1
+
+
+@pytest.mark.parametrize('engine', ['claude', 'codex'])
+def test_spawn_refuses_duplicate_across_engines(hub, repo, paseo, engine, capsys):
+    paseo.rows = [ptask(PNAME)]
+    c = Claude()
+    assert spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', PNAME, '--engine', engine) == 2
+    assert PNAME in capsys.readouterr().err and not c.did('--bg') and not paseo.did('run')
+    paseo.rows, c.rows = [], [task(PNAME)]
+    assert spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', PNAME, '--engine', engine) == 2
+    assert not c.did('--bg') and not paseo.did('run')
+
+
+def test_spawn_claude_without_paseo(hub, repo, paseo, capsys):
+    """paseo 가 없는 PC(CI)에서 claude 엔진은 그대로다. codex 와 antigravity 는 거부한다."""
+    paseo.missing = True
+    c = Claude()
+    assert spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', 'task-T20261126-02-a') == 0
+    assert c.did('--bg') == [['--bg', '--name', 'task-T20261126-02-a', '--effort', 'high']], 'claude 인자는 바뀌지 않는다'
+    assert 'paseo' not in capsys.readouterr().err, '없는 것은 알리지 않는다'
+    assert spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', PNAME, '--engine', 'codex') == 2
+    assert 'paseo' in capsys.readouterr().err and len(c.did('--bg')) == 1
+
+
+def test_spawn_when_paseo_ls_fails(hub, repo, paseo, capsys):
+    paseo.fails = {'ls'}
+    c = Claude()
+    assert spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', 'task-T20261126-02-a') == 0, 'claude 엔진은 막지 않는다'
+    assert 'paseo ls' in capsys.readouterr().err, '세지 못한 것은 알린다'
+    assert spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', PNAME, '--engine', 'codex') == 1
+    assert 'paseo ls' in capsys.readouterr().err and not paseo.did('run')
+
+
+def test_spawn_paseo_run_failure_writes_nothing(hub, repo, paseo, capsys):
+    paseo.fails = {'run'}
+    assert spawn(Claude(), '--hub', str(hub), '--cwd', str(repo), '--name', PNAME, '--engine', 'codex') == 1
+    assert 'paseo run' in capsys.readouterr().err
+    assert not (hub / '.lanekeeper' / 'tasks').exists()
+
+
+@pytest.mark.parametrize('args,word', [
+    (['--engine', 'gemini', '--name', PNAME, '--cwd', '.'], 'engine'),
+    (['--engine', 'codex', '--resident', 'WF1'], 'resident'),
+    (['--engine', 'antigravity', '--name', PNAME, '--cwd', '.', '--effort', 'high'], '모델'),
+])
+def test_spawn_engine_refuses(roster_hub, paseo, args, word, capsys):
+    c = Claude()
+    assert spawn(c, '--hub', str(roster_hub), *args) == 2
+    assert word in capsys.readouterr().err and not c.did('--bg') and not paseo.did('run')
+
+
+def test_spawn_claude_model_flag(hub, repo):
+    c = Claude()
+    assert spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', 'task-T20261126-02-a', '--model', 'opus') == 0
+    assert c.did('--bg') == [['--bg', '--name', 'task-T20261126-02-a', '--effort', 'high', '--model', 'opus']]
+
+
+def test_run_paseo_drops_caller_env(monkeypatch):
+    """허브가 Paseo 세션이면 PASEO_AGENT_ID 가 물려 온다. 두면 paseo run 이 --cwd 대신 허브 폴더에 허브의 자식으로 띄운다."""
+    seen = {}
+
+    def fake_run(argv, **kw):
+        seen['argv'], seen['env'] = argv, kw.get('env')
+        return subprocess.CompletedProcess(argv, 0, '[]', '')
+
+    monkeypatch.setattr(lk.shutil, 'which', lambda n: '/bin/' + n)
+    monkeypatch.setattr(lk.subprocess, 'run', fake_run)
+    monkeypatch.setenv('PASEO_AGENT_ID', 'hub-agent')
+    monkeypatch.setenv('PASEO_WORKSPACE_ID', 'wks_hub')
+    monkeypatch.setenv('PASEO_HOME', '/h/.paseo')
+    code, out, _ = REAL_RUN_PASEO(['ls', '--json'])
+    assert code == 0 and seen['argv'] == ['/bin/paseo', 'ls', '--json']
+    assert 'PASEO_AGENT_ID' not in seen['env'] and 'PASEO_WORKSPACE_ID' not in seen['env']
+    assert seen['env']['PASEO_HOME'] == '/h/.paseo'
+    monkeypatch.setattr(lk.shutil, 'which', lambda n: None)
+    assert REAL_RUN_PASEO(['ls'])[0] == 127, 'paseo 가 없으면 127'
+
+
+@pytest.fixture
+def spawned(hub, repo, paseo):
+    """lk spawn --engine codex 로 repo 에 띄운 Paseo 세션의 id."""
+    assert spawn(Claude(), '--hub', str(hub), '--cwd', str(repo), '--name', PNAME, '--engine', 'codex',
+                 '--model', 'gpt-6.2-sol', '--verify', 'pytest') == 0
+    return paseo.rows[0]['id']
+
+
+def commit_on_branch(repo, branch, push):
+    """codex 는 띄운 checkout 에서 브랜치를 바꿔 일하기도 한다(T-20261117-01)."""
+    git(repo, 'checkout', '-q', '-b', branch)
+    (repo / 'b.txt').write_text('b\n')
+    git(repo, 'add', '.')
+    git(repo, 'commit', '-qm', 'b')
+    if push:
+        git(repo, 'push', '-q', 'origin', branch)
+
+
+def test_close_paseo_pushed_records_then_archives(hub, repo, paseo, spawned, capsys):
+    commit_on_branch(repo, 'feat', push=True)
+    c = Claude([task('hub', kind='interactive', id=None, sessionId='hub-sid', state=None)])
+    assert close(c, hub, PNAME) == 0, capsys.readouterr()
+    assert not c.did('stop') and not c.did('rm'), 'claude 세션 명령은 부르지 않는다'
+    assert [a[0] for a in paseo.calls if a[0] in ('stop', 'archive')] == ['stop', 'archive']
+    assert paseo.did('stop') == [['stop', spawned]] and paseo.did('archive')[0][:2] == ['archive', spawned]
+    assert paseo.rows[0]['archived'] and not paseo.did('delete'), '지우지 않고 보관한다'
+    [r] = closed(hub)
+    assert (r['engine'], r['task'], r['name'], r['id'], r['sessionId']) == ('codex', 'T-20261126-01', PNAME, spawned, spawned)
+    assert r['provider'] == 'codex/gpt-6.2-sol' and r['cwd'] == str(repo) and r['workdir'] == str(repo)
+    assert r['branch'] == 'feat' and r['head'] == git(repo, 'rev-parse', 'HEAD') and 'refs/remotes/origin/feat' in r['git']
+    assert r['tokens'] is None, '모르는 토큰은 비워 둔다'
+    assert r['paseo_last_usage'] == {'InputTokens': 5, 'OutputTokens': 7, 'CachedTokens': 11, 'CostUsd': 0}
+    assert r['verify']['spec'] == ['pytest'] and r['started_at'].startswith('2026-11-26')
+    assert r['last_activity_at'].startswith('2026-11-26') and r['active_s'] == 1800
+
+
+def test_close_paseo_refuses_unpushed(hub, repo, paseo, spawned, capsys):
+    commit_on_branch(repo, 'feat', push=False)
+    assert close(Claude(), hub, PNAME) == 2
+    assert '원격' in capsys.readouterr().err
+    assert not paseo.did('stop') and not paseo.did('archive') and closed(hub) == []
+
+
+def test_close_paseo_dirty_and_snapshot(hub, repo, paseo, capsys):
+    (repo / 'user.txt').write_text('사용자 파일\n')     # 띄우기 전부터 있던 사용자 파일
+    assert spawn(Claude(), '--hub', str(hub), '--cwd', str(repo), '--name', PNAME, '--engine', 'codex') == 0
+    (repo / 'new.py').write_text('x\n')                # 세션이 만든 커밋하지 않은 파일
+    assert close(Claude(), hub, PNAME) == 2
+    assert 'new.py' in capsys.readouterr().err and not paseo.did('stop')
+    (repo / 'new.py').unlink()
+    assert close(Claude(), hub, PNAME) == 0, '띄울 때 있던 변경은 뺀다'
+    assert '띄울 때' in closed(hub)[0]['git']
+
+
+def test_close_paseo_rechecks_after_stop(hub, repo, paseo, spawned, capsys):
+    def stop_then_write(args):
+        r = paseo(args)
+        if args[0] == 'stop':
+            (repo / 'late.py').write_text('x\n')        # 멈추기 전 마지막 차례에 쓴 파일
+        return r
+
+    assert lk.main(['close', '--hub', str(hub), PNAME], claude=Claude(), paseo=stop_then_write) == 2
+    err = capsys.readouterr().err
+    assert 'late.py' in err and 'paseo send' in err and not paseo.did('archive') and closed(hub) == []
+
+
+def test_close_paseo_archive_failure_and_retry(hub, repo, paseo, spawned, capsys):
+    paseo.fails = {'archive'}
+    assert close(Claude(), hub, PNAME) == 1
+    assert 'archive' in capsys.readouterr().err and len(closed(hub)) == 1, '보관 전에 기록을 남긴다'
+    paseo.fails = set()
+    assert close(Claude(), hub, spawned[:7]) == 0, 'shortId 로도 닫는다'
+    assert len(closed(hub)) == 1, '다시 닫아도 같은 세션 줄을 두 번 쓰지 않는다'
+
+
+def test_close_paseo_reports_not_archived(hub, repo, paseo, spawned, capsys):
+    paseo.keeps_archive = True
+    assert close(Claude(), hub, PNAME) == 1
+    assert '보관' in capsys.readouterr().err and len(closed(hub)) == 1
+
+
+def test_close_paseo_running_after_stop_forces_archive(hub, repo, paseo, spawned):
+    paseo.running_after_stop = True
+    assert close(Claude(), hub, PNAME) == 0
+    assert '--force' in paseo.did('archive')[0] and paseo.rows[0]['archived']
+
+
+def test_close_paseo_record_failure_keeps_session(hub, tmp_path, paseo, capsys):
+    d = tmp_path / 'plain'
+    d.mkdir()
+    paseo.rows = [ptask(PNAME, cwd=str(d))]
+    (hub / '.lanekeeper').write_text('a file, so no folder', encoding='utf-8')
+    assert close(Claude(), hub, PNAME) == 1
+    assert '기록' in capsys.readouterr().err and not paseo.did('archive'), '기록을 못 남기면 보관하지 않는다'
+
+
+@pytest.mark.parametrize('claude_rows,paseo_rows,key,word', [
+    ([task(PNAME)], [ptask(PNAME)], PNAME, 'id'),                          # 두 엔진에 같은 이름
+    ([], [ptask('hub', provider='claude')], 'hub', 'task-'),              # 상주(허브) Paseo 세션
+    ([], [ptask(PNAME, archived=True)], PNAME, '없'),                       # 이미 보관함
+])
+def test_close_paseo_refuses(hub, paseo, claude_rows, paseo_rows, key, word, capsys):
+    paseo.rows = paseo_rows
+    c = Claude(claude_rows)
+    assert close(c, hub, key) == 2
+    assert word in capsys.readouterr().err
+    assert not c.did('stop') and not paseo.did('stop') and not paseo.did('archive')
+
+
+def test_close_paseo_non_git_folder(hub, tmp_path, paseo):
+    d = tmp_path / 'plain'
+    d.mkdir()
+    paseo.rows = [ptask(PNAME, cwd=str(d), provider='antigravity', model='gemini-4-neon-high')]
+    assert close(Claude(), hub, PNAME) == 0
+    [r] = closed(hub)
+    assert r['git'] == 'git 저장소 아님' and r['engine'] == 'antigravity' and r['task'] == 'T-20261126-01'
