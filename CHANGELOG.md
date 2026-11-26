@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 (2026-11-26)
+
+`lk spawn` and `lk close` can start and close Codex and Antigravity task sessions through the Paseo CLI, next to Claude sessions. `lk close` cannot see a worktree that a Paseo session makes by itself, so when the work goes into a worktree, the hub makes it first and passes it as `--cwd`.
+
+The hub templates and settings examples do not change in this version, so updating the plugin is enough ([Updating](https://github.com/holiday0726/lanekeeper/blob/main/README.md#updating), [한국어](https://github.com/holiday0726/lanekeeper/blob/main/README.ko.md#업데이트)).
 
 ### Added
 
@@ -11,6 +15,10 @@
 ### Changed
 
 - `lk` runs `paseo` without `PASEO_AGENT_ID` and `PASEO_WORKSPACE_ID`. A hub running inside Paseo passes them on to its shells, and with them `paseo run` puts the new session in the hub's folder instead of `--cwd` and labels it a child of the hub, so archiving the hub would archive it too.
+
+### Fixed
+
+- Claude token counts (`claude_tokens()`, used by the dashboard and by `lk close`) now include workflow transcripts, and a copy of a session no longer counts the original's messages again. The main transcript, subagents and workflows are merged by assistant message id; copies with the same `sessionId` count each id once, and an id that a resumed session inherited under another `sessionId` counts only for the session that started first. `total` is still input + output + cache writes with cache reads apart, and a `workflows` field gives the number of workflow transcript files. The dashboard runs the full count in the background, so `tokens` is `null` until the first count finishes and then shows the last finished one; `lk close` waits for the count.
 
 ## 0.8.0 (2026-11-16)
 
