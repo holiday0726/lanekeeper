@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
 """lk: 작업 세션을 띄우고 닫는다. 허브와 슈퍼바이저가 claude --bg, claude rm 대신 쓴다(설정 예시가 그 둘을 deny 한다).
 
-  lk spawn --name task-T<YYYYMMDD>-<NN>-<주제> --cwd <저장소> [--effort high] [--verify "<명령>"]... [--hub <허브>]
-           [-- <claude 인자>...]
+  lk spawn --name task-T<YYYYMMDD>-<NN>-<주제> --cwd <저장소> [--engine claude|codex|antigravity] [--model <id>]
+           [--effort high] [--verify "<명령>"]... [--hub <허브>] [-- <claude 나 paseo run 인자>...]
   lk spawn --resident <agents.json resident 이름> [--cwd <폴더>] [--effort high] [--hub <허브>] [-- <claude 인자>...]
   lk close <이름 또는 id> [--hub <허브>]
 
 플러그인 bin/lk 가 이 파일을 부른다. 플러그인이 켜져 있으면 bin/ 이 Bash 도구 PATH 에 있다.
 허브 폴더: --hub, 환경 변수 LANEKEEPER_HUB_DIR, cwd 와 그 위 폴더 중 lanes.json 이나 resident 가 있는 agents.json 이 든 곳 순.
-동시 작업 세션 상한: 환경 변수 LANEKEEPER_MAX_TASKS(기본 8). claude agents --json(끝난 세션 빼고)에서 이름이
-task- 로 시작하는 세션을 센다. 상주 세션은 이름이 task- 로 시작하지 않으니 세지 않는다. 막힌(blocked) 세션도 떠 있으니 센다.
+엔진: 기본 claude 는 claude --bg 로 띄운다. codex, antigravity 는 Paseo CLI 로 띄운다:
+  paseo run --no-wait --json --title <이름> --provider <엔진> [--model <id>] [--thinking <effort>] --mode full-access
+  --cwd <저장소> [-- 뒤 인자] "<대기 한 줄>". 첫 배정과 그 뒤 메시지는 허브가 paseo send 로 보낸다(lk 밖).
+  codex 는 --effort 를 --thinking 으로 넘기고, antigravity 는 thinking 이 없어 --effort 를 거부한다(모델 id 로 고른다).
+  paseo 를 부를 때 PASEO_AGENT_ID, PASEO_WORKSPACE_ID 는 뺀다. 허브가 Paseo 세션이면 이 둘이 물려 오는데, 두면 paseo run 이
+  --cwd 를 버리고 허브 폴더에 허브의 자식으로 띄운다(허브를 보관하면 같이 보관된다). paseo 가 없으면 claude 엔진은 그대로다.
+동시 작업 세션 상한: 환경 변수 LANEKEEPER_MAX_TASKS(기본 8). claude agents --json(끝난 세션 빼고)과 paseo ls --global --json
+(보관한 세션 빼고)을 이름으로 합쳐 task- 로 시작하는 세션을 센다. 같은 이름 거부도 두 목록을 함께 본다. paseo 가 있는데
+paseo ls 가 실패하면 claude 엔진은 알리고 띄우고(Paseo 세션은 세지 못함), Paseo 엔진은 실패로 멈춘다.
+상주 세션은 이름이 task- 로 시작하지 않으니 세지 않는다. 막힌(blocked) 세션도 떠 있으니 센다.
 --resident: 이름이 agents.json resident 에 있을 때만(대소문자까지 같게, task- 아님, lane HUB 아님) 띄운다. 이름 규칙과
   상한을 보지 않고 T 번호 기록을 남기지 않는다. --cwd 가 없으면 명부의 cwd. 같은 이름이 떠 있으면 거부한다.
 
@@ -36,6 +44,12 @@ close: claude agents --json 의 cwd 는 믿을 수 없어(떠 있는 세션은 �
   사본 폴더는 메시지 id 로 합치고, 다른 sessionId 가 물려받은 같은 id 는 먼저 시작한 원본 세션에 한 번만 센다.
   재지시(redirects)는 lk close 를 부른 세션(CLAUDE_CODE_SESSION_ID)이 그 세션에 보낸 메시지 수에서 첫 배정 하나를 뺀 값이다.
   부른 세션을 모르면(Claude 세션 밖에서 부름) 받은 메시지 전체에서 하나를 뺀다. 원래 수는 messages_in, from_caller 에 둔다.
+close(Paseo 세션, paseo ls --global 에 이름이나 id, shortId 가 있을 때): paseo inspect 의 Cwd(띄운 폴더)를 위와 같은 git 검사
+  (lk spawn 기록의 git_at_spawn 을 빼고)로 보고, paseo stop, 다시 검사, 기록, paseo archive --force, paseo inspect 로 보관 확인
+  순이다. agent archive 는 폴더를 지우지 않지만(0.15.1) 기록을 먼저 남긴다. 세션이 띄운 폴더 밖에 스스로 만든 worktree 는
+  알 수 없어 보지 않는다(그런 일은 worktree 를 --cwd 로 주어 띄운다). 기록 줄은 via "paseo", engine(provider), provider
+  (provider/model), sessionId(Paseo id)를 두고, tokens, messages_in, from_caller, redirects 는 null, paseo_last_usage 에
+  paseo inspect 의 LastUsage 를 그대로 둔다. claude 목록과 Paseo 목록에 같은 이름이 있으면 거부한다(id 로 닫는다).
 종료 코드: 0 됨, 2 규칙으로 거부(안전한지 모를 때 포함), 1 claude 실패나 기록 실패. 출력은 UTF-8 이다.
 """
 import argparse
@@ -70,6 +84,25 @@ def run_claude(args, cwd=None):
     try:
         r = subprocess.run([shutil.which('claude') or 'claude'] + list(args), cwd=cwd, capture_output=True,
                            encoding='utf-8', errors='replace', timeout=120)
+    except (OSError, subprocess.SubprocessError) as e:
+        return 127, '', str(e)
+    return r.returncode, r.stdout or '', r.stderr or ''
+
+
+# lk 를 부른 셸에 물려 온 Paseo 호출자 표시. 허브가 Paseo 세션이면 남는데, 두면 paseo run 이 --cwd 대신 허브의 폴더와
+# workspace 에 허브의 자식(paseo.parent-agent-id)으로 띄운다(0.15.1 intent.js resolvePlacement). 허브를 보관하면 같이 보관된다
+PASEO_CALLER_ENV = ('PASEO_AGENT_ID', 'PASEO_WORKSPACE_ID')
+
+
+def run_paseo(args):
+    """(종료 코드, stdout, stderr). paseo 가 없거나 돌리지 못하면 127. 시험은 이 함수를 바꿔 끼운다."""
+    exe = shutil.which('paseo')
+    if not exe:
+        return 127, '', 'paseo 를 찾지 못했다'
+    env = {k: v for k, v in os.environ.items() if k not in PASEO_CALLER_ENV}
+    try:
+        r = subprocess.run([exe] + list(args), capture_output=True, encoding='utf-8', errors='replace', timeout=120,
+                           env=env)
     except (OSError, subprocess.SubprocessError) as e:
         return 127, '', str(e)
     return r.returncode, r.stdout or '', r.stderr or ''
@@ -162,6 +195,43 @@ def agents(claude, all_=False):
     return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
 
 
+def paseo_rows(paseo, need):
+    """paseo ls --global --json 행(보관한 세션은 빠진다). paseo 가 없으면 [], need 면 거부한다.
+
+    실패하거나 JSON 이 아니면 need 면 Fail, 아니면 알리고 [] 로 본다(claude 엔진을 Paseo 데몬 때문에 막지 않는다).
+    """
+    code, out, err = paseo(['ls', '--global', '--json'])
+    if code == 127:
+        if need:
+            raise Refuse('paseo 를 찾지 못했다. codex, antigravity 엔진은 Paseo CLI 가 있어야 한다(%s)' % err.strip()[:200])
+        return []
+    rows = None
+    if code == 0:
+        try:
+            rows = json.loads(out or '[]')
+        except ValueError:
+            pass
+    if not isinstance(rows, list):
+        why = ('paseo ls --global --json 이 실패했다(종료 코드 %d): %s' % (code, (err.strip() or out.strip())[:300]) if code
+               else 'paseo ls --global --json 출력을 JSON 으로 읽지 못했다')
+        if need:
+            raise Fail(why)
+        print('lk: %s. Paseo 세션은 세지 않았다' % why, file=sys.stderr)
+        return []
+    return [r for r in rows if isinstance(r, dict)]
+
+
+def paseo_inspect(paseo, pid):
+    code, out, err = paseo(['inspect', pid, '--json'])
+    try:
+        d = json.loads(out) if code == 0 else None
+    except ValueError:
+        d = None
+    if not isinstance(d, dict):
+        raise Fail('paseo inspect %s 이 실패했다: %s' % (pid, (err.strip() or out.strip())[:300]))
+    return d
+
+
 def caller(rows):
     """lk 를 부른 Claude 세션의 이름. 세션 밖에서 불렀으면 ''."""
     sid = os.environ.get('CLAUDE_CODE_SESSION_ID', '')
@@ -239,7 +309,7 @@ def spawn_resident(a, extra, claude):
         raise Refuse('같은 이름의 세션이 이미 떠 있다: %s(id %s). 맥락을 새로 하려면 옛 세션을 claude stop 으로 멈추고, '
                      '다시 띄운다. 목록에서 지우는 claude rm 은 필요하면 사용자에게 부탁한다' % (
                          name, ', '.join(str(r.get('id') or r.get('sessionId')) for r in live)))
-    args = ['--bg', '--name', name, '--effort', a.effort] + extra
+    args = claude_args(a, name) + extra
     code, out, err = claude(args, cwd)
     sys.stdout.write(out)
     sys.stderr.write(err)
@@ -249,11 +319,26 @@ def spawn_resident(a, extra, claude):
     return 0
 
 
-def spawn(a, extra, claude):
+ENGINES = ('claude', 'codex', 'antigravity')
+PASEO_MODE = 'full-access'   # antigravity 는 이 모드뿐이다. codex 도 허브 작업 세션은 이 모드로 띄운다
+WAIT_PROMPT = '허브 배정을 기다리세요. 배정 메시지가 오기 전에는 아무 일도 하지 마세요.'   # paseo run 은 프롬프트가 꼭 있어야 한다
+
+
+def claude_args(a, name):
+    return ['--bg', '--name', name, '--effort', a.effort or 'high'] + (['--model', a.model] if a.model else [])
+
+
+def spawn(a, extra, claude, paseo):
+    if a.engine not in ENGINES:
+        raise Refuse('--engine 은 %s 중 하나다. 받은 값: %s' % (', '.join(ENGINES), a.engine))
     if bool(a.name) == bool(a.resident):
         raise Refuse('--name(작업 세션)이나 --resident(상주 세션) 중 하나만 준다')
     if a.resident:
+        if a.engine != 'claude':
+            raise Refuse('상주 세션(--resident)은 claude 엔진으로만 띄운다. --engine %s 는 작업 세션(--name)에 준다' % a.engine)
         return spawn_resident(a, extra, claude)
+    if a.engine == 'antigravity' and a.effort:
+        raise Refuse('antigravity 에는 thinking 단계가 없다. --effort 대신 모델 id 로 고른다(예: --model gemini-4-neon-xhigh)')
     info = task_name(a.name)
     if not info:
         raise Refuse('이름은 task-T<YYYYMMDD>-<NN>-<주제> 꼴이다(주제는 영어 소문자, 숫자, 하이픈). '
@@ -265,29 +350,86 @@ def spawn(a, extra, claude):
     if not os.path.isdir(cwd):
         raise Refuse('폴더가 없다: ' + cwd)
     rows = agents(claude)
-    if any(r.get('name') == a.name for r in rows):
-        raise Refuse('같은 이름의 세션이 이미 떠 있다: ' + a.name)
-    tasks = sorted(str(r.get('name')) for r in rows if str(r.get('name') or '').startswith('task-'))
+    prow = paseo_rows(paseo, need=a.engine != 'claude')
+    dup = [str(r.get('id') or r.get('sessionId') or '') for r in rows if r.get('name') == a.name] + [
+        'Paseo ' + str(r.get('id') or '') for r in prow if r.get('name') == a.name]
+    if dup:
+        raise Refuse('같은 이름의 세션이 이미 떠 있다: %s(%s)' % (a.name, ', '.join(dup)))
+    names = [str(r.get('name') or '') for r in rows + prow]   # 상한은 claude 와 Paseo 작업 세션을 합쳐 센다
+    tasks = sorted({n for n in names if n.startswith('task-')})
     limit = max_tasks()
     if len(tasks) >= limit:
         raise Refuse('작업 세션이 이미 %d개 떠 있어(상한 %d) 띄우지 않는다. 끝난 세션을 lk close 로 닫고 다시 띄운다: %s' % (
             len(tasks), limit, ', '.join(tasks)))
-    args = ['--bg', '--name', a.name, '--effort', a.effort] + extra
     base = snapshot(cwd)   # 세션이 쓰기 전에. lk close 가 띄운 폴더의 사용자 파일을 세션 변경과 가른다
-    code, out, err = claude(args, cwd)
-    sys.stdout.write(out)   # backgrounded · <id> 줄을 그대로 둔다. 대시보드가 이 줄로 누가 띄웠는지 잇는다
-    sys.stderr.write(err)
-    if code != 0:
-        raise Fail('claude --bg 가 실패했다(종료 코드 %d). 기록을 남기지 않았다' % code)
-    m = server.BG_OUT.search(out)
-    sess = {'name': a.name, 'id': m.group(1) if m else '', 'cwd': cwd, 'spawned_at': iso(time.time()),
-            'by': caller(rows), 'args': args, 'git_at_spawn': base}
+    if a.engine == 'claude':
+        sess = spawn_claude(a, extra, claude, cwd)
+    else:
+        sess = spawn_paseo(a, extra, paseo, cwd)
+    sess.update({'cwd': cwd, 'spawned_at': iso(time.time()), 'by': caller(rows), 'git_at_spawn': base})
     try:
         paths = record_spawn(hub, cwd, info['task'], a.verify, sess)
     except OSError as e:
         raise Fail('세션은 떴지만(%s) 기록을 남기지 못했다: %s' % (sess['id'] or a.name, e))
     print('lk: 작업 세션 %d/%d. 기록 %s' % (len(tasks) + 1, limit, ', '.join(paths)))
     return 0
+
+
+def spawn_claude(a, extra, claude, cwd):
+    args = claude_args(a, a.name) + extra
+    code, out, err = claude(args, cwd)
+    sys.stdout.write(out)   # backgrounded · <id> 줄을 그대로 둔다. 대시보드가 이 줄로 누가 띄웠는지 잇는다
+    sys.stderr.write(err)
+    if code != 0:
+        raise Fail('claude --bg 가 실패했다(종료 코드 %d). 기록을 남기지 않았다' % code)
+    m = server.BG_OUT.search(out)
+    return {'name': a.name, 'id': m.group(1) if m else '', 'args': args}
+
+
+def paseo_workspace(paseo, cwd):
+    """cwd 폴더의 local workspace id(paseo workspace ls --json 의 첫 것). 없거나 목록을 못 읽으면 ''.
+
+    paseo run 은 --workspace 가 없으면 같은 폴더라도 부를 때마다 workspace 를 새로 만든다(0.15.1 실측). 작업마다 Paseo 화면에
+    workspace 가 쌓이지 않게 폴더의 것을 다시 쓴다. worktree 와 background workspace 는 쓰지 않는다.
+    """
+    code, out, _ = paseo(['workspace', 'ls', '--json'])
+    try:
+        rows = json.loads(out) if code == 0 else []
+    except ValueError:
+        rows = []
+    for w in rows if isinstance(rows, list) else []:
+        if (isinstance(w, dict) and w.get('isolation') == 'local' and not w.get('background') and w.get('workspaceId')
+                and same(os.path.expanduser(str(w.get('cwd') or '')), cwd)):
+            return str(w['workspaceId'])
+    return ''
+
+
+def spawn_paseo(a, extra, paseo, cwd):
+    """paseo run 으로 codex, antigravity 세션을 띄운다. 첫 배정은 허브가 paseo send 로 보내니 대기 한 줄만 준다.
+
+    --no-wait 가 없으면 paseo run 은 첫 차례가 끝날 때까지 기다린다. --json 의 stdout 은 {agentId, status, provider, cwd,
+    title} 하나이고 workspace 안내는 stderr 로 간다. codex 는 --effort 를 --thinking 으로 넘긴다(low..ultra).
+    """
+    wid = paseo_workspace(paseo, cwd)
+    args = (['run', '--no-wait', '--json', '--title', a.name, '--provider', a.engine] +
+            (['--model', a.model] if a.model else []) + (['--thinking', a.effort] if a.effort else []) +
+            ['--mode', PASEO_MODE, '--cwd', cwd] + (['--workspace', wid] if wid else []) + extra + [WAIT_PROMPT])
+    code, out, err = paseo(args)
+    if code != 0:
+        raise Fail('paseo run 이 실패했다(종료 코드 %d): %s. 기록을 남기지 않았다' % (code, (err.strip() or out.strip())[:600]))
+    try:
+        res = json.loads(out)
+    except ValueError:
+        res = None
+    pid = str(res.get('agentId') or '') if isinstance(res, dict) else ''
+    if not pid:
+        raise Fail('paseo run 출력에서 agentId 를 읽지 못했다. paseo ls --global 에서 %s 를 찾아 확인한다. '
+                   '기록을 남기지 않았다: %s' % (a.name, out.strip()[:300]))
+    got = os.path.expanduser(str(res.get('cwd') or ''))
+    if got and not same(got, cwd):
+        print('lk: paseo 가 %s 대신 %s 에 띄웠다. paseo inspect %s 로 확인한다' % (cwd, got, pid), file=sys.stderr)
+    print('lk: paseo 세션 · %s · %s · %s%s · %s' % (pid, a.name, a.engine, '/' + a.model if a.model else '', cwd))
+    return {'name': a.name, 'id': pid, 'engine': a.engine, 'model': a.model or '', 'args': args}
 
 
 STATUS = ('status', '--porcelain', '--', ':/', ':(top,exclude).claude/worktrees')
@@ -576,14 +718,89 @@ def append_once(path, rec):
     return True
 
 
-def close(a, claude):
+def stamp(s):
+    """Paseo 의 ISO 시각(2026-11-26T01:00:00.000Z)을 초로. 못 읽으면 None."""
+    try:
+        return datetime.fromisoformat(str(s).replace('Z', '+00:00')).timestamp()
+    except ValueError:
+        return None
+
+
+def paseo_record(p, info, rows, hub, t, place):
+    """Paseo 세션 closed.jsonl 줄. 토큰과 받은 메시지는 lk 가 읽을 transcript 가 없어 비워 둔다(None).
+
+    paseo_last_usage 는 paseo inspect 의 LastUsage 를 그대로 둔다(Paseo 가 provider 마다 다르게 채우니 합계로 쓰지 않는다).
+    """
+    pid, cwd = str(p.get('id') or ''), place['path']
+    now, started, last = time.time(), stamp(info.get('CreatedAt')), stamp(info.get('UpdatedAt'))
+    provider, model = str(info.get('Provider') or ''), str(info.get('Model') or '')
+    return {'closed_at': iso(now), 'via': 'paseo', 'engine': provider, 'provider': provider + ('/' + model if model else ''),
+            'task': t, 'name': str(p.get('name') or ''), 'id': pid, 'sessionId': pid, 'cwd': cwd, 'workdir': cwd,
+            'branch': place['branch'], 'head': place['head'], 'git': place['git'], 'places': [place],
+            'started_at': iso(started) if started else '', 'last_activity_at': iso(last) if last else '',
+            'elapsed_s': round(now - started) if started else None,
+            'active_s': round(last - started) if started and last else None,
+            'tokens': None, 'paseo_last_usage': info.get('LastUsage'), 'messages_in': None, 'from_caller': None,
+            'caller': caller(rows), 'redirects': None, 'verify': verify_record(hub, cwd, cwd, t), 'transcript': '',
+            'lk': version()}
+
+
+def close_paseo(hub, p, rows, paseo):
+    """Paseo 세션 닫기: 띄운 폴더 검사, paseo stop, 다시 검사, 기록, paseo archive --force 순이다.
+
+    세션이 일한 곳은 paseo inspect 의 Cwd(lk spawn 의 --cwd)다. Paseo 는 도구 호출마다 폴더를 남기지 않고 codex transcript 의
+    명령도 코드 덩어리라, 세션이 스스로 만든 worktree 는 찾지 못한다. 그런 일은 허브가 worktree 를 --cwd 로 주어 띄운다.
+    agent archive 는 폴더를 지우지 않는다(0.15.1: 실행을 멈추고 기록에 archivedAt 을 단다. 폴더를 지우는 것은 workspace
+    archive 이고 Paseo 가 만든 worktree 만이다). 그래도 claude rm 때처럼 기록을 먼저 남긴다.
+    """
+    name, pid = str(p.get('name') or ''), str(p.get('id') or '')
+    if not name.startswith('task-'):
+        raise Refuse('작업 세션(이름이 task- 로 시작)만 닫는다. 상주 세션은 lk close 로 닫지 않는다: ' + (name or pid))
+    t = (task_name(name) or {}).get('task') or roster_task(hub, name)
+    info = paseo_inspect(paseo, pid)
+    cwd = str(info.get('Cwd') or '')
+    if not cwd:
+        raise Refuse('paseo inspect %s 에 Cwd 가 없어 세션이 일한 곳을 알 수 없다. 닫지 않는다' % pid)
+    base = spawn_base(hub, cwd, t, {'id': pid})
+    ok, why, _, _ = git_safety(cwd, base)
+    if not ok:
+        raise Refuse(why + ('' if base or not why.startswith('커밋하지 않은') else
+                            '. 띄운 폴더에 늘 있는 사용자 파일이면 그 저장소의 .git/info/exclude 에 적거나, 세션을 lk spawn 으로 '
+                            '띄워 띄울 때 상태를 남긴다'))
+    code, out, err = paseo(['stop', pid])   # 쉬는 세션에는 아무 일도 하지 않고 0 이다. 표 출력은 마지막 줄이 대신한다
+    if code != 0 and paseo_inspect(paseo, pid).get('Status') == 'running':
+        raise Fail('paseo stop %s 이 실패했고 세션이 아직 돈다: %s' % (pid, (err.strip() or out.strip())[:300]))
+    ok, why, branch, head = git_safety(cwd, base)   # 멈추는 사이 커밋하거나 썼을 수 있다
+    if not ok:
+        raise Refuse(why + '. 세션은 멈춰 두었다(paseo send %s 로 다시 연다)' % pid)
+    path = os.path.join(hub, STATE, 'closed.jsonl')
+    place = {'path': cwd, 'branch': branch, 'head': head, 'git': why}
+    try:
+        append_once(path, paseo_record(p, info, rows, hub, t, place))
+    except OSError as e:
+        raise Fail('기록을 남기지 못해 보관하지 않았다. 세션은 멈춰 두었다(paseo send %s 로 다시 연다): %s' % (pid, e))
+    # --force: 멈춘 직후에도 running 으로 남아 있으면 archive 가 거부한다. 검사를 마쳤으니 남은 차례는 끊는다
+    code, out, err = paseo(['archive', pid, '--force'])
+    if code != 0:
+        raise Fail('paseo archive %s 이 실패했다. 기록은 남겼다(%s): %s' % (pid, path, (err.strip() or out.strip())[:300]))
+    if not paseo_inspect(paseo, pid).get('Archived'):
+        raise Fail('paseo archive %s 이 0 을 돌려줬지만 paseo inspect 에 보관되지 않은 것으로 나온다. 기록은 남겼다(%s)' % (pid, path))
+    print('lk: %s 를 닫았다(Paseo %s 보관, %s, %s). 기록 %s' % (name, pid, cwd, why, path))
+    return 0
+
+
+def close(a, claude, paseo):
     hub = need_hub(a)
     rows = agents(claude, all_=True)
     hit = [r for r in rows if a.key and (r.get('name') == a.key or r.get('id') == a.key)]
-    if not hit:
-        raise Refuse('claude agents --json --all 에 없는 세션이다: ' + a.key)
-    if len(hit) > 1:
-        raise Refuse('이름이 같은 세션이 %d개다. id 로 닫는다: %s' % (len(hit), ', '.join(str(r.get('id')) for r in hit)))
+    phit = [r for r in paseo_rows(paseo, need=False) if a.key and a.key in (r.get('name'), r.get('id'), r.get('shortId'))]
+    if not hit and not phit:
+        raise Refuse('claude agents --json --all 과 paseo ls --global 에 없는 세션이다: ' + a.key)
+    if len(hit) + len(phit) > 1:
+        raise Refuse('이름이 같은 세션이 %d개다. id 로 닫는다: %s' % (len(hit) + len(phit), ', '.join(
+            [str(r.get('id')) for r in hit] + ['Paseo ' + str(r.get('id')) for r in phit])))
+    if phit:
+        return close_paseo(hub, phit[0], rows, paseo)
     r = hit[0]
     name, sid = str(r.get('name') or ''), r.get('id')
     if not name.startswith('task-'):
@@ -618,7 +835,8 @@ def close(a, claude):
     return 0
 
 
-def main(argv=None, claude=run_claude):
+def main(argv=None, claude=run_claude, paseo=None):
+    paseo = paseo or run_paseo   # 부를 때 푼다. 시험이 lk.run_paseo 를 바꿔 끼운다
     argv = list(sys.argv[1:] if argv is None else argv)
     extra = []
     if '--' in argv:
@@ -626,23 +844,29 @@ def main(argv=None, claude=run_claude):
         argv, extra = argv[:i], argv[i + 1:]
     ap = argparse.ArgumentParser(prog='lk', description='lanekeeper 작업 세션 띄우기와 닫기')
     sub = ap.add_subparsers(dest='cmd', required=True)
-    sp = sub.add_parser('spawn', help='claude --bg 로 작업 세션(--name)이나 상주 세션(--resident)을 띄운다')
+    sp = sub.add_parser('spawn', help='작업 세션(--name)이나 상주 세션(--resident)을 띄운다. claude 는 claude --bg, '
+                                      'codex 와 antigravity 는 paseo run')
     sp.add_argument('--name', default='', help='task-T<YYYYMMDD>-<NN>-<주제>')
-    sp.add_argument('--resident', default='', metavar='이름', help='agents.json resident 에 있는 상주 세션 이름')
+    sp.add_argument('--resident', default='', metavar='이름', help='agents.json resident 에 있는 상주 세션 이름(claude 엔진만)')
     sp.add_argument('--cwd', default='', help='세션을 열 저장소. 작업 세션은 꼭 준다. 상주는 없으면 명부의 cwd')
-    sp.add_argument('--effort', default='high', help='claude --effort. 기본 high, 복잡한 일은 xhigh')
+    sp.add_argument('--engine', default='claude', metavar='|'.join(ENGINES),
+                    help='기본 claude(claude --bg). codex, antigravity 는 Paseo 로 띄운다(paseo run, 모드 %s)' % PASEO_MODE)
+    sp.add_argument('--model', default='', metavar='모델 id', help='claude 는 --model, Paseo 는 provider 의 모델 id(paseo '
+                                                                 'provider models <엔진>). 없으면 기본 모델')
+    sp.add_argument('--effort', default=None, help='claude --effort(기본 high, 복잡한 일은 xhigh). codex 는 --thinking 으로 '
+                                                   '넘기고 없으면 provider 기본값. antigravity 는 받지 않는다(모델 id 로 고른다)')
     sp.add_argument('--verify', action='append', default=[], metavar='명령', help='완료 확인 명령(여러 번)')
     sp.add_argument('--hub', default='', help='허브 폴더')
-    cp = sub.add_parser('close', help='기록을 남기고 claude stop, claude rm 으로 닫는다')
+    cp = sub.add_parser('close', help='기록을 남기고 닫는다. claude 는 claude stop, rm. Paseo 세션은 paseo stop, archive')
     cp.add_argument('key', metavar='이름|id')
     cp.add_argument('--hub', default='', help='허브 폴더')
     a = ap.parse_args(argv)
     try:
         if a.cmd == 'spawn':
-            return spawn(a, extra, claude)
+            return spawn(a, extra, claude, paseo)
         if extra:
             raise Refuse('lk close 는 -- 뒤 인자를 받지 않는다')
-        return close(a, claude)
+        return close(a, claude, paseo)
     except (Refuse, Fail) as e:
         print('lk: ' + str(e), file=sys.stderr)
         return e.code
