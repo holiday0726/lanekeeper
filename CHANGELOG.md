@@ -4,7 +4,7 @@
 
 `lk spawn` and `lk close` can start and close Codex and Antigravity task sessions through the Paseo CLI, next to Claude sessions. `lk close` cannot see a worktree that a Paseo session makes by itself, so when the work goes into a worktree, the hub makes it first and passes it as `--cwd`.
 
-The hub templates and settings examples do not change in this version, so updating the plugin is enough ([Updating](https://github.com/holiday0726/lanekeeper/blob/main/README.md#updating), [한국어](https://github.com/holiday0726/lanekeeper/blob/main/README.ko.md#업데이트)).
+The hub templates and settings examples do not change in this version, so updating the plugin is enough. The dashboard server changes, so stop a dashboard still running from 0.8.0; the hub session's start message says so when it finds one ([Updating](https://github.com/holiday0726/lanekeeper/blob/main/README.md#updating), [한국어](https://github.com/holiday0726/lanekeeper/blob/main/README.ko.md#업데이트)).
 
 ### Added
 
