@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `lk spawn` leaves finished Paseo sessions out of the cap (`LANEKEEPER_MAX_TASKS`) and the duplicate check, as `claude agents --json` leaves out `done`. A Paseo session that is not archived is finished when its `status` is `idle` (its turn ended) or `closed` (not loaded in the daemon), the two Paseo 0.15.1 itself treats as finished. `running`, `initializing`, `error` and a missing or unknown status still count. A Paseo session that has finished the one-line wait prompt from `lk spawn` is therefore not counted until the hub sends its first assignment. `lk close` still finds finished sessions, and still asks for an id when a name is listed twice.
+
 ## 0.9.0 (2026-11-26)
 
 `lk spawn` and `lk close` can start and close Codex and Antigravity task sessions through the Paseo CLI, next to Claude sessions. `lk close` cannot see a worktree that a Paseo session makes by itself, so when the work goes into a worktree, the hub makes it first and passes it as `--cwd`.
