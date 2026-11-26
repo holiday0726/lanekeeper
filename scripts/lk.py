@@ -16,9 +16,13 @@
   --cwd 를 버리고 허브 폴더에 허브의 자식으로 띄운다(허브를 보관하면 같이 보관된다). paseo 가 없으면 claude 엔진은 그대로다.
   그 폴더의 local workspace 가 있으면 --workspace 로 다시 쓴다. -- 뒤로 --title, --cwd, --workspace, --new-workspace,
   --worktree 같은 자리 옵션은 받지 않는다(worktree 에서 일할 세션은 worktree 를 --cwd 로 준다).
-동시 작업 세션 상한: 환경 변수 LANEKEEPER_MAX_TASKS(기본 8). claude agents --json(끝난 세션 빼고)과 paseo ls --global --json
-(보관한 세션 빼고)을 이름으로 합쳐 task- 로 시작하는 세션을 센다. 같은 이름 거부도 두 목록을 함께 본다. paseo 가 있는데
-paseo ls 가 실패하면 claude 엔진은 알리고 띄우고(Paseo 세션은 세지 못함), Paseo 엔진은 실패로 멈춘다.
+동시 작업 세션 상한: 환경 변수 LANEKEEPER_MAX_TASKS(기본 8). claude agents --json(끝난 세션 done 빼고)과 paseo ls --global
+--json(보관한 세션과 끝난 세션 빼고)을 이름으로 합쳐 task- 로 시작하는 세션을 센다. Paseo 에서 끝난 세션은 status 가 idle(차례를
+마치고 기다림)이나 closed(데몬에 올라 있지 않음)인 것이다. Paseo 도 이 둘을 끝난 것으로 본다(0.15.1 agent-manager.js
+hasFinishedStatus). running, initializing, error 와 status 가 없거나 모르는 값이면 센다. 같은 이름 거부도 두 목록을 함께 보고,
+끝난 세션은 claude 의 done 처럼 보지 않는다(이름이 겹치면 lk close 가 id 로 닫게 한다). 그래서 대기 한 줄을 마친 Paseo 세션은
+허브가 첫 배정을 paseo send 로 보내기 전까지 세지 않는다. paseo 가 있는데 paseo ls 가 실패하면 claude 엔진은 알리고
+띄우고(Paseo 세션은 세지 못함), Paseo 엔진은 실패로 멈춘다.
 상주 세션은 이름이 task- 로 시작하지 않으니 세지 않는다. 막힌(blocked) 세션도 떠 있으니 센다.
 --resident: 이름이 agents.json resident 에 있을 때만(대소문자까지 같게, task- 아님, lane HUB 아님) 띄운다. 이름 규칙과
   상한을 보지 않고 T 번호 기록을 남기지 않는다. --cwd 가 없으면 명부의 cwd. 같은 이름이 떠 있으면 거부한다.
@@ -198,8 +202,12 @@ def agents(claude, all_=False):
     return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
 
 
+PASEO_FINISHED = ('idle', 'closed')   # 차례를 마쳤거나 데몬에 올라 있지 않다. 0.15.1 hasFinishedStatus 와 같다
+
+
 def paseo_rows(paseo, need, lost='Paseo 세션은 세지 않았다'):
-    """paseo ls --global --json 행(보관한 세션은 빠진다). paseo 가 없으면 [], need 면 거부한다.
+    """paseo ls --global --json 행(보관한 세션은 빠진다. 끝난 세션은 남으니 lk spawn 이 PASEO_FINISHED 로 뺀다).
+    paseo 가 없으면 [], need 면 거부한다.
 
     실패하거나 JSON 이 아니면 need 면 Fail, 아니면 lost 를 붙여 알리고 [] 로 본다(claude 엔진을 Paseo 데몬 때문에 막지 않는다).
     """
@@ -359,12 +367,13 @@ def spawn(a, extra, claude, paseo):
     if not os.path.isdir(cwd):
         raise Refuse('폴더가 없다: ' + cwd)
     rows = agents(claude)
-    prow = paseo_rows(paseo, need=a.engine != 'claude')
+    # 끝난 Paseo 세션은 claude agents --json 이 done 을 빼듯 뺀다. lk close 는 이 행도 찾아야 하니 paseo_rows 에서 빼지 않는다
+    prow = [r for r in paseo_rows(paseo, need=a.engine != 'claude') if r.get('status') not in PASEO_FINISHED]
     dup = [str(r.get('id') or r.get('sessionId') or '') for r in rows if r.get('name') == a.name] + [
         'Paseo ' + str(r.get('id') or '') for r in prow if r.get('name') == a.name]
     if dup:
         raise Refuse('같은 이름의 세션이 이미 떠 있다: %s(%s)' % (a.name, ', '.join(dup)))
-    # 상한은 claude 와 Paseo 작업 세션을 합쳐 센다. claude 는 예전처럼 행 수로, Paseo 는 claude 에 없는 이름만 더한다
+    # 상한은 claude 와 Paseo 작업 세션(끝난 것 빼고)을 합쳐 센다. claude 는 예전처럼 행 수로, Paseo 는 claude 에 없는 이름만 더한다
     mine = [str(r.get('name') or '') for r in rows]
     tasks = sorted(n for n in mine + sorted({str(r.get('name') or '') for r in prow} - set(mine)) if n.startswith('task-'))
     limit = max_tasks()

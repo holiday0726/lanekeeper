@@ -828,8 +828,8 @@ def test_spawn_paseo_passes_extra_args(hub, repo, paseo):
 
 def test_spawn_limit_counts_claude_and_paseo(hub, repo, paseo, capsys):
     c = Claude([task('task-T20261126-%02d-c' % i) for i in range(1, 5)] + [task('hub', kind='interactive', id=None)])
-    paseo.rows = [ptask('task-T20261126-%02d-x' % i) for i in range(11, 14)] + [
-        ptask('hub', provider='claude'), ptask('task-T20261125-01-old', archived=True)]
+    paseo.rows = [ptask('task-T20261126-%02d-x' % i, status='running') for i in range(11, 14)] + [
+        ptask('hub', provider='claude', status='running'), ptask('task-T20261125-01-old', archived=True, status='running')]
     assert spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', 'task-T20261126-20-y', '--engine', 'codex') == 0, \
         '4 + 3 이면 띄운다(보관한 세션, task- 아닌 세션은 세지 않는다)'
     for engine in ('codex', 'claude'):
@@ -839,9 +839,42 @@ def test_spawn_limit_counts_claude_and_paseo(hub, repo, paseo, capsys):
     assert not c.did('--bg') and len(paseo.did('run')) == 1
 
 
+def test_spawn_limit_skips_finished_paseo(hub, repo, paseo, capsys):
+    """끝난 Paseo 세션(idle, closed)은 보관하지 않아도 세지 않는다. claude agents --json 이 done 을 빼는 것과 같다.
+    돌거나(running, initializing) 오류로 멈췄거나(error) 상태를 모르는 세션은 센다."""
+    c = Claude([task('task-T20261126-%02d-c' % i) for i in range(1, 4)])
+    paseo.rows = [ptask('task-T20261126-%02d-i' % i, status='idle') for i in range(11, 15)] + [
+        ptask('task-T20261126-15-closed', status='closed'), ptask('task-T20261126-16-run', status='running'),
+        ptask('task-T20261126-17-init', status='initializing'), ptask('task-T20261126-18-err', status='error'),
+        dict(ptask('task-T20261126-19-none'), status=None)]
+    assert spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', 'task-T20261126-20-y', '--engine', 'codex') == 0, \
+        'claude 3 + Paseo 4(running, initializing, error, 상태 없음) = 7 이면 띄운다'
+    out = capsys.readouterr().out
+    assert '8/8' in out, out
+    assert spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', 'task-T20261126-21-z') == 2
+    err = capsys.readouterr().err
+    for n in ('16-run', '17-init', '18-err', '19-none', '20-y'):
+        assert 'task-T20261126-' + n in err, err
+    for n in ('11-i', '15-closed'):
+        assert 'task-T20261126-' + n not in err, err
+
+
+def test_spawn_allows_name_of_finished_paseo(hub, repo, paseo, capsys):
+    """같은 이름 거부도 끝난 세션은 보지 않는다(claude 의 done 처럼). 닫을 때는 이름이 겹치면 id 로 닫게 한다."""
+    for status in ('idle', 'closed'):
+        paseo.rows = [ptask(PNAME, status=status)]
+        c = Claude()
+        assert spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', PNAME, '--engine', 'codex') == 0, status
+        assert len(paseo.did('run')) == 1
+        paseo.calls = []
+    paseo.rows = [ptask(PNAME, status='idle')]
+    close(Claude(), hub, PNAME)
+    assert paseo.did('inspect'), 'lk close 는 끝난 세션도 찾는다(이름으로 찾아 paseo inspect 로 넘어간다)'
+
+
 @pytest.mark.parametrize('engine', ['claude', 'codex'])
 def test_spawn_refuses_duplicate_across_engines(hub, repo, paseo, engine, capsys):
-    paseo.rows = [ptask(PNAME)]
+    paseo.rows = [ptask(PNAME, status='running')]
     c = Claude()
     assert spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', PNAME, '--engine', engine) == 2
     assert PNAME in capsys.readouterr().err and not c.did('--bg') and not paseo.did('run')
@@ -1075,7 +1108,7 @@ def test_spawn_limit_keeps_claude_row_count(hub, repo, paseo, capsys):
     assert spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', 'task-T20261126-20-y') == 2, '행 8개면 거부'
     assert '8' in capsys.readouterr().err
     c.rows = c.rows[1:]
-    paseo.rows = [ptask('task-T20261126-01-c')]
+    paseo.rows = [ptask('task-T20261126-01-c', status='running')]
     assert spawn(c, '--hub', str(hub), '--cwd', str(repo), '--name', 'task-T20261126-20-y') == 0, \
         'claude 7개와 같은 이름의 Paseo 행은 7개로 센다'
 
